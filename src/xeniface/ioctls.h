@@ -34,9 +34,8 @@
 
 NTSTATUS
 XenIFaceIoctl(
-    __in  PXENIFACE_FDO         Fdo,
+    __in  PXENIFACE_FDO     Fdo,
     __in  PIRP              Irp
     );
 
 #endif // _IOCTLS_H_
-
