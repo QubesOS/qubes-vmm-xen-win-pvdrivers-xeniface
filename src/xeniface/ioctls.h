@@ -32,10 +32,26 @@
 #ifndef _IOCTLS_H_
 #define _IOCTLS_H_
 
+typedef struct _XENIFACE_EVTCHN_CONTEXT {
+    LIST_ENTRY Entry;
+    PXENBUS_EVTCHN_CHANNEL Channel;
+    ULONG LocalPort;
+    PKEVENT Event;
+    PEPROCESS Process;
+    KDPC Dpc;
+} XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
+
 NTSTATUS
 XenIFaceIoctl(
     __in  PXENIFACE_FDO     Fdo,
     __in  PIRP              Irp
+    );
+
+VOID
+EvtchnProcessNotify(
+    __in HANDLE ParentId,
+    __in HANDLE ProcessId,
+    __in BOOLEAN Create
     );
 
 #endif // _IOCTLS_H_

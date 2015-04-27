@@ -35,6 +35,7 @@
 #include <stdlib.h>
 
 #include <store_interface.h>
+#include <evtchn_interface.h>
 #include <suspend_interface.h>
 
 #include "driver.h"
@@ -652,6 +653,10 @@ __FdoD3ToD0(
     if (!NT_SUCCESS(status))
         goto fail1;
 
+    status = XENBUS_EVTCHN(Acquire, &Fdo->EvtchnInterface);
+    if (!NT_SUCCESS(status))
+        goto fail2;
+
     __FdoSetDevicePowerState(Fdo, PowerDeviceD0);
 
     PowerState.DeviceState = PowerDeviceD0;
@@ -663,6 +668,9 @@ __FdoD3ToD0(
 
     return STATUS_SUCCESS;
 
+fail2:
+    Error("fail2\n");
+    XENBUS_STORE(Release, &Fdo->StoreInterface);
 fail1:
     Error("fail1 (%08x)\n", status);
 
@@ -689,6 +697,7 @@ __FdoD0ToD3(
     __FdoSetDevicePowerState(Fdo, PowerDeviceD3);
 
     XENBUS_STORE(Release, &Fdo->StoreInterface);
+    XENBUS_EVTCHN(Release, &Fdo->EvtchnInterface);
 
     Trace("<====\n");
 }
@@ -2168,6 +2177,8 @@ fail1:
                       (_Size),                                                          \
                       (_Optional))
 
+PXENIFACE_FDO FdoGlobal = NULL;
+
 NTSTATUS
 FdoCreate(
     IN  PDEVICE_OBJECT  PhysicalDeviceObject
@@ -2264,10 +2275,19 @@ FdoCreate(
                                  XENBUS,
                                  STORE,
                                  (PINTERFACE)&Fdo->StoreInterface,
-                                 sizeof (Fdo->StoreInterface),
+                                 sizeof(Fdo->StoreInterface),
                                  FALSE);
     if (!NT_SUCCESS(status))
         goto fail10;
+
+    status = FDO_QUERY_INTERFACE(Fdo,
+                                 XENBUS,
+                                 EVTCHN,
+                                 (PINTERFACE)&Fdo->EvtchnInterface,
+                                 sizeof(Fdo->EvtchnInterface),
+                                 FALSE);
+    if (!NT_SUCCESS(status))
+        goto fail11;
 
     InitializeMutex(&Fdo->Mutex);
     InitializeListHead(&Dx->ListEntry);
@@ -2279,7 +2299,15 @@ FdoCreate(
 
     status = ThreadCreate(FdoRegistryThreadHandler, Fdo, &Fdo->registryThread);
     if (!NT_SUCCESS(status))
-        goto fail11;
+        goto fail12;
+
+    KeInitializeSpinLock(&Fdo->EvtchnLock);
+    InitializeListHead(&Fdo->EvtchnList);
+    ASSERT(FdoGlobal == NULL);
+    FdoGlobal = Fdo;
+    status = PsSetCreateProcessNotifyRoutine(EvtchnProcessNotify, FALSE);
+    if (!NT_SUCCESS(status))
+        goto fail13;
 
     Info("%p (%s)\n",
          FunctionDeviceObject,
@@ -2290,17 +2318,25 @@ FdoCreate(
 
     return STATUS_SUCCESS;
 
+fail13:
+    Error("fail14\n");
+fail12:
+    Error("fail13\n");
+
+    RtlZeroMemory(&Fdo->EvtchnInterface,
+                  sizeof(XENBUS_EVTCHN_INTERFACE));
+
 fail11:
     Error("fail11\n");
 
     RtlZeroMemory(&Fdo->StoreInterface,
-                  sizeof (XENBUS_STORE_INTERFACE));
+                  sizeof(XENBUS_STORE_INTERFACE));
 
 fail10:
     Error("fail10\n");
 
     RtlZeroMemory(&Fdo->SharedInfoInterface,
-                  sizeof (XENBUS_SHARED_INFO_INTERFACE));
+                  sizeof(XENBUS_SHARED_INFO_INTERFACE));
 
 fail9:
     Error("fail8\n");
@@ -2377,9 +2413,18 @@ FdoDestroy(
 
     Dx->Fdo = NULL;
 
+    PsSetCreateProcessNotifyRoutine(EvtchnProcessNotify, TRUE);
+    FdoGlobal = NULL;
+    ASSERT(IsListEmpty(&Fdo->EvtchnList));
+    RtlZeroMemory(&Fdo->EvtchnList, sizeof(LIST_ENTRY));
+    RtlZeroMemory(&Fdo->EvtchnLock, sizeof(KSPIN_LOCK));
+
     RtlZeroMemory(&Fdo->Mutex, sizeof (XENIFACE_MUTEX));
 
     Fdo->InterfacesAcquired = FALSE;
+
+    RtlZeroMemory(&Fdo->EvtchnInterface,
+                  sizeof(XENBUS_EVTCHN_INTERFACE));
 
     RtlZeroMemory(&Fdo->StoreInterface,
                   sizeof (XENBUS_STORE_INTERFACE));

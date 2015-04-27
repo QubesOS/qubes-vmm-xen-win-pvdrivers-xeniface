@@ -43,6 +43,7 @@
 #include <suspend_interface.h>
 #include <shared_info_interface.h>
 #include <store_interface.h>
+#include <evtchn_interface.h>
 
 #include <version.h>
 
@@ -395,6 +396,7 @@ DifInstallPostProcess(
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, SUSPEND);
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, SHARED_INFO);
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, STORE);
+    SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, EVTCHN);
 
     Log("<====");
 

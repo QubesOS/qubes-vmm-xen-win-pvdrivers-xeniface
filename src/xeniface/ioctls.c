@@ -83,7 +83,7 @@ __DisplayMultiSz(
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
-IoctlRead(
+IoctlStoreRead(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -143,7 +143,7 @@ fail1:
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
-IoctlWrite(
+IoctlStoreWrite(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -187,7 +187,7 @@ fail1:
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
-IoctlDirectory(
+IoctlStoreDirectory(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -252,7 +252,7 @@ fail1:
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
-IoctlRemove(
+IoctlStoreRemove(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -285,6 +285,385 @@ fail1:
     return status;
 }
 
+_Function_class_(KDEFERRED_ROUTINE)
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_requires_same_
+static
+VOID
+EvtchnDpc(
+    __in     PKDPC Dpc,
+    __in_opt PVOID Context,
+    __in_opt PVOID Argument1,
+    __in_opt PVOID Argument2
+    )
+{
+    XENIFACE_EVTCHN_CONTEXT *Ctx = (XENIFACE_EVTCHN_CONTEXT *)Context;
+
+    UNREFERENCED_PARAMETER(Dpc);
+    UNREFERENCED_PARAMETER(Argument1);
+    UNREFERENCED_PARAMETER(Argument2);
+    ASSERT(Context != NULL);
+
+    XenIfaceDebugPrint(TRACE, "Channel %p, LocalPort %d, IRQL %d\n", Ctx->Channel, Ctx->LocalPort, KeGetCurrentIrql());
+    KeSetEvent(Ctx->Event, 0, FALSE);
+}
+
+_Function_class_(KSERVICE_ROUTINE)
+_IRQL_requires_(HIGH_LEVEL)
+_IRQL_requires_same_
+static DECLSPEC_NOINLINE
+BOOLEAN
+EvtchnCallback(
+    __in     struct _KINTERRUPT *Interrupt,
+    __in_opt PVOID Argument
+    )
+{
+    XENIFACE_EVTCHN_CONTEXT *Context = (XENIFACE_EVTCHN_CONTEXT *)Argument;
+
+    UNREFERENCED_PARAMETER(Interrupt);
+    ASSERT(Context != NULL);
+
+    XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, IRQL %d\n", Context->Channel, Context->LocalPort, KeGetCurrentIrql());
+
+    // we're running at high irql, queue a dpc to signal the event
+    KeInsertQueueDpc(&Context->Dpc, NULL, NULL);
+
+    return TRUE;
+}
+
+static
+VOID
+EvtchnFree(
+    __in PXENIFACE_FDO Fdo,
+    __in XENIFACE_EVTCHN_CONTEXT *Context
+    )
+{
+    XenIfaceDebugPrint(INFO, "LocalPort %d, Process %p\n", Context->LocalPort, Context->Process);
+    XENBUS_EVTCHN(Close, &Fdo->EvtchnInterface, Context->Channel);
+    ObDereferenceObject(Context->Event);
+    RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+}
+
+// Process creation/destruction notify routine.
+// Used for cleaning up of allocated event channels.
+// Runs at PASSIVE_LEVEL and if Create==FALSE, in the context of the process being destroyed.
+VOID
+EvtchnProcessNotify(
+    __in HANDLE ParentId,
+    __in HANDLE ProcessId,
+    __in BOOLEAN Create
+    )
+{
+    PEPROCESS CurrentProcess;
+    PLIST_ENTRY Node;
+    XENIFACE_EVTCHN_CONTEXT *Record;
+    KIRQL Irql;
+
+    UNREFERENCED_PARAMETER(ParentId);
+    UNREFERENCED_PARAMETER(ProcessId);
+
+    // we're only interested in process destruction for cleanup purposes
+    if (Create)
+        return;
+
+    CurrentProcess = PsGetCurrentProcess();
+
+    // Walk the list, find everything that's allocated by this process and still not freed.
+    KeAcquireSpinLock(&FdoGlobal->EvtchnLock, &Irql);
+    Node = FdoGlobal->EvtchnList.Flink;
+    while (Node->Flink != FdoGlobal->EvtchnList.Flink) {
+        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Record->Process != CurrentProcess)
+            continue;
+
+        XenIfaceDebugPrint(INFO, "Process %p\n", CurrentProcess);
+        RemoveEntryList(&Record->Entry);
+        EvtchnFree(FdoGlobal, Record);
+    }
+    KeReleaseSpinLock(&FdoGlobal->EvtchnLock, Irql);
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnBindUnboundPort(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    )
+{
+    NTSTATUS status;
+    EVTCHN_BIND_UNBOUND_PORT_IN *In = (EVTCHN_BIND_UNBOUND_PORT_IN *)Buffer;
+    EVTCHN_BIND_UNBOUND_PORT_OUT *Out = (EVTCHN_BIND_UNBOUND_PORT_OUT *)Buffer;
+    XENIFACE_EVTCHN_CONTEXT *Context;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_IN) || OutLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT))
+        goto fail1;
+
+    status = STATUS_NO_MEMORY;
+    Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_EVTCHN_CONTEXT), XENIFACE_POOL_TAG);
+    if (Context == NULL)
+        goto fail2;
+
+    RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
+    Context->Process = PsGetCurrentProcess();
+
+    XenIfaceDebugPrint(INFO, "> (RemoteDomain %d, Mask %d) Process %p\n",
+                       In->RemoteDomain, In->Mask, Context->Process);
+
+    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    if (!NT_SUCCESS(status))
+        goto fail3;
+
+    status = STATUS_UNSUCCESSFUL;
+    Context->Channel = XENBUS_EVTCHN(Open,
+                                     &Fdo->EvtchnInterface,
+                                     XENBUS_EVTCHN_TYPE_UNBOUND,
+                                     EvtchnCallback,
+                                     Context,
+                                     In->RemoteDomain,
+                                     FALSE);
+    if (Context->Channel == NULL)
+        goto fail4;
+
+    Context->LocalPort = XENBUS_EVTCHN(GetPort,
+                                       &Fdo->EvtchnInterface,
+                                       Context->Channel);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    InsertTailList(&Fdo->EvtchnList, &Context->Entry);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
+
+    Out->LocalPort = Context->LocalPort;
+    *Info = sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT);
+
+    if (!In->Mask) {
+        XENBUS_EVTCHN(Unmask,
+                      &Fdo->EvtchnInterface,
+                      Context->Channel,
+                      FALSE);
+    }
+
+    XenIfaceDebugPrint(INFO, "< LocalPort %d, Context %p\n", Context->LocalPort, Context);
+    return STATUS_SUCCESS;
+
+fail4:
+    XenIfaceDebugPrint(ERROR, "Fail4\n");
+    ObDereferenceObject(Context->Event);
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+    RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnBindInterdomain(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    )
+{
+    NTSTATUS status;
+    EVTCHN_BIND_INTERDOMAIN_IN *In = (EVTCHN_BIND_INTERDOMAIN_IN *)Buffer;
+    EVTCHN_BIND_INTERDOMAIN_OUT *Out = (EVTCHN_BIND_INTERDOMAIN_OUT *)Buffer;
+    XENIFACE_EVTCHN_CONTEXT *Context;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_BIND_INTERDOMAIN_IN) || OutLen != sizeof(EVTCHN_BIND_INTERDOMAIN_OUT))
+        goto fail1;
+
+    status = STATUS_NO_MEMORY;
+    Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_EVTCHN_CONTEXT), XENIFACE_POOL_TAG);
+    if (Context == NULL)
+        goto fail2;
+
+    RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
+    Context->Process = PsGetCurrentProcess();
+
+    XenIfaceDebugPrint(INFO, "> (RemoteDomain %d, RemotePort %d, Mask %d) Process %p\n",
+                       In->RemoteDomain, In->RemotePort, In->Mask, Context->Process);
+
+    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    if (!NT_SUCCESS(status))
+        goto fail3;
+
+    status = STATUS_UNSUCCESSFUL;
+    Context->Channel = XENBUS_EVTCHN(Open,
+                                     &Fdo->EvtchnInterface,
+                                     XENBUS_EVTCHN_TYPE_INTER_DOMAIN,
+                                     EvtchnCallback,
+                                     Context,
+                                     In->RemoteDomain,
+                                     In->RemotePort,
+                                     FALSE);
+    if (Context->Channel == NULL)
+        goto fail4;
+
+    Context->LocalPort = XENBUS_EVTCHN(GetPort,
+                                       &Fdo->EvtchnInterface,
+                                       Context->Channel);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    InsertTailList(&Fdo->EvtchnList, &Context->Entry);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
+
+    Out->LocalPort = Context->LocalPort;
+
+    *Info = sizeof(EVTCHN_BIND_INTERDOMAIN_OUT);
+
+    if (!In->Mask) {
+        XENBUS_EVTCHN(Unmask,
+                      &Fdo->EvtchnInterface,
+                      Context->Channel,
+                      FALSE);
+    }
+
+    XenIfaceDebugPrint(INFO, "< LocalPort %d, Context %p\n", Context->LocalPort, Context);
+
+    return STATUS_SUCCESS;
+
+fail4:
+    XenIfaceDebugPrint(ERROR, "Fail4\n");
+    ObDereferenceObject(Context->Event);
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+    RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnClose(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    EVTCHN_CLOSE_IN *In = (EVTCHN_CLOSE_IN *)Buffer;
+    XENIFACE_EVTCHN_CONTEXT *Record, *Found = NULL;
+    PLIST_ENTRY Node;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_CLOSE_IN) || OutLen != 0)
+        goto fail1;
+
+    XenIfaceDebugPrint(INFO, "(LocalPort %d)\n", In->LocalPort);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    Node = Fdo->EvtchnList.Flink;
+    while (Node->Flink != Fdo->EvtchnList.Flink) {
+        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Record->LocalPort != In->LocalPort)
+            continue;
+
+        RemoveEntryList(&Record->Entry);
+        Found = Record;
+    }
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (Found == NULL)
+        goto fail2;
+
+    XenIfaceDebugPrint(INFO, "Context %p\n", Found);
+
+    EvtchnFree(Fdo, Found);
+
+    return STATUS_SUCCESS;
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnNotify(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    EVTCHN_NOTIFY_IN *In = (EVTCHN_NOTIFY_IN *)Buffer;
+    XENIFACE_EVTCHN_CONTEXT *Record, *Found = NULL;
+    PLIST_ENTRY Node;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_NOTIFY_IN) || OutLen != 0)
+        goto fail1;
+
+    XenIfaceDebugPrint(INFO, "(LocalPort %d)\n", In->LocalPort);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    Node = Fdo->EvtchnList.Flink;
+    while (Node->Flink != Fdo->EvtchnList.Flink) {
+        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Record->LocalPort != In->LocalPort)
+            continue;
+
+        Found = Record;
+    }
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (Found == NULL)
+        goto fail2;
+
+    XenIfaceDebugPrint(INFO, "Context %p\n", Found);
+
+    status = STATUS_ACCESS_DENIED;
+    if (Found->Process != PsGetCurrentProcess())
+        goto fail3;
+
+    XENBUS_EVTCHN(Send, &Fdo->EvtchnInterface, Found->Channel);
+
+    return STATUS_SUCCESS;
+
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
 NTSTATUS
 XenIFaceIoctl(
     __in  PXENIFACE_FDO     Fdo,
@@ -302,21 +681,38 @@ XenIFaceIoctl(
         goto done;
 
     switch (Stack->Parameters.DeviceIoControl.IoControlCode) {
-
+        // store
     case IOCTL_XENIFACE_STORE_READ:
-        status = IoctlRead(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        status = IoctlStoreRead(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_STORE_WRITE:
-        status = IoctlWrite(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        status = IoctlStoreWrite(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
     case IOCTL_XENIFACE_STORE_DIRECTORY:
-        status = IoctlDirectory(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        status = IoctlStoreDirectory(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_STORE_REMOVE:
-        status = IoctlRemove(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        status = IoctlStoreRemove(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+        // evtchn
+    case IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT:
+        status = IoctlEvtchnBindUnboundPort(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        break;
+
+    case IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN:
+        status = IoctlEvtchnBindInterdomain(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        break;
+
+    case IOCTL_XENIFACE_EVTCHN_CLOSE:
+        status = IoctlEvtchnClose(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+    case IOCTL_XENIFACE_EVTCHN_NOTIFY:
+        status = IoctlEvtchnNotify(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
     default:

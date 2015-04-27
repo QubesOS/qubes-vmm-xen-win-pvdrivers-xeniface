@@ -34,6 +34,7 @@
 
 #include <ntddk.h>
 #include <store_interface.h>
+#include <evtchn_interface.h>
 #include <suspend_interface.h>
 #include <shared_info_interface.h>
 
@@ -76,9 +77,13 @@ typedef struct _XENIFACE_FDO {
     XENBUS_STORE_INTERFACE          StoreInterface;
     XENBUS_SUSPEND_INTERFACE        SuspendInterface;
     XENBUS_SHARED_INFO_INTERFACE    SharedInfoInterface;
+    XENBUS_EVTCHN_INTERFACE         EvtchnInterface;
     PXENBUS_SUSPEND_CALLBACK        SuspendCallbackLate;
 
     BOOLEAN                         InterfacesAcquired;
+
+    KSPIN_LOCK                      EvtchnLock;
+    LIST_ENTRY                      EvtchnList;
 
     #define MAX_SESSIONS    (65536)
 
@@ -157,5 +162,7 @@ FdoDispatch(
     IN  PXENIFACE_FDO    Fdo,
     IN  PIRP            Irp
     );
+
+extern PXENIFACE_FDO FdoGlobal;
 
 #endif  // _XENIFACE_FDO_H

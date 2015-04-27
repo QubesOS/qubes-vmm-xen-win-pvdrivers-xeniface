@@ -35,6 +35,9 @@
 DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
     0xb2cfb085, 0xaa5e, 0x47e1, 0x8b, 0xf7, 0x97, 0x93, 0xf3, 0x15, 0x45, 0x65);
 
+/************************************************************************/
+/* store ioctls                                                         */
+/************************************************************************/
 #define IOCTL_XENIFACE_STORE_READ \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_XENIFACE_STORE_WRITE \
@@ -44,5 +47,64 @@ DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
 #define IOCTL_XENIFACE_STORE_REMOVE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#endif // _XENIFACE_IOCTLS_H_
+/************************************************************************/
+/* evtchn ioctls                                                        */
+/************************************************************************/
+#define IOCTL_XENIFACE_EVTCHN_BIND_VIRQ \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+typedef struct _EVTCHN_BIND_VIRQ_IN {
+    ULONG Virq;
+    HANDLE Event;
+} EVTCHN_BIND_VIRQ_IN, *PEVTCHN_BIND_VIRQ_IN;
+
+typedef struct _EVTCHN_BIND_VIRQ_OUT {
+    ULONG LocalPort;
+} EVTCHN_BIND_VIRQ_OUT, *PEVTCHN_BIND_VIRQ_OUT;
+
+#define IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_BIND_INTERDOMAIN_IN {
+    USHORT RemoteDomain;
+    ULONG RemotePort;
+    BOOLEAN Mask;
+    HANDLE Event;
+} EVTCHN_BIND_INTERDOMAIN_IN, *PEVTCHN_BIND_INTERDOMAIN_IN;
+
+typedef struct _EVTCHN_BIND_INTERDOMAIN_OUT {
+    ULONG LocalPort;
+} EVTCHN_BIND_INTERDOMAIN_OUT, *PEVTCHN_BIND_INTERDOMAIN_OUT;
+
+#define IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x812, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_BIND_UNBOUND_PORT_IN
+{
+    USHORT RemoteDomain;
+    BOOLEAN Mask;
+    HANDLE Event;
+} EVTCHN_BIND_UNBOUND_PORT_IN, *PEVTCHN_BIND_UNBOUND_PORT_IN;
+
+typedef struct _EVTCHN_BIND_UNBOUND_PORT_OUT {
+    ULONG LocalPort;
+} EVTCHN_BIND_UNBOUND_PORT_OUT, *PEVTCHN_BIND_UNBOUND_PORT_OUT;
+
+#define IOCTL_XENIFACE_EVTCHN_CLOSE \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x813, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_CLOSE_IN {
+    ULONG LocalPort;
+} EVTCHN_CLOSE_IN, *PEVTCHN_CLOSE_IN;
+
+#define IOCTL_XENIFACE_EVTCHN_NOTIFY \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x814, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_NOTIFY_IN {
+    ULONG LocalPort;
+} EVTCHN_NOTIFY_IN, *PEVTCHN_NOTIFY_IN;
+
+#define IOCTL_XENIFACE_EVTCHN_RESET \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#endif // _XENIFACE_IOCTLS_H_
