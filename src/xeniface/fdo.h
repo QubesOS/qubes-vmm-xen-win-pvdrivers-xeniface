@@ -35,6 +35,7 @@
 #include <ntddk.h>
 #include <store_interface.h>
 #include <evtchn_interface.h>
+#include <gnttab_interface.h>
 #include <suspend_interface.h>
 #include <shared_info_interface.h>
 
@@ -78,12 +79,17 @@ typedef struct _XENIFACE_FDO {
     XENBUS_SUSPEND_INTERFACE        SuspendInterface;
     XENBUS_SHARED_INFO_INTERFACE    SharedInfoInterface;
     XENBUS_EVTCHN_INTERFACE         EvtchnInterface;
+    XENBUS_GNTTAB_INTERFACE         GnttabInterface;
     PXENBUS_SUSPEND_CALLBACK        SuspendCallbackLate;
 
     BOOLEAN                         InterfacesAcquired;
 
     KSPIN_LOCK                      EvtchnLock;
     LIST_ENTRY                      EvtchnList;
+
+    PXENBUS_GNTTAB_CACHE            GnttabCache;
+    KSPIN_LOCK                      GnttabGrantLock;
+    LIST_ENTRY                      GnttabGrantList;
 
     #define MAX_SESSIONS    (65536)
 

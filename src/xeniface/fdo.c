@@ -36,6 +36,7 @@
 
 #include <store_interface.h>
 #include <evtchn_interface.h>
+#include <gnttab_interface.h>
 #include <suspend_interface.h>
 
 #include "driver.h"
@@ -657,6 +658,21 @@ __FdoD3ToD0(
     if (!NT_SUCCESS(status))
         goto fail2;
 
+    status = XENBUS_GNTTAB(Acquire, &Fdo->GnttabInterface);
+    if (!NT_SUCCESS(status))
+        goto fail3;
+
+    status = XENBUS_GNTTAB(CreateCache,
+                           &Fdo->GnttabInterface,
+                           "xeniface-gnttab",
+                           0,
+                           GnttabAcquireLock,
+                           GnttabReleaseLock,
+                           Fdo,
+                           &Fdo->GnttabCache);
+    if (!NT_SUCCESS(status))
+        goto fail4;
+
     __FdoSetDevicePowerState(Fdo, PowerDeviceD0);
 
     PowerState.DeviceState = PowerDeviceD0;
@@ -668,9 +684,18 @@ __FdoD3ToD0(
 
     return STATUS_SUCCESS;
 
+fail4:
+    Error("fail4\n");
+    XENBUS_GNTTAB(Release, &Fdo->GnttabInterface);
+
+fail3:
+    Error("fail3\n");
+    XENBUS_EVTCHN(Release, &Fdo->EvtchnInterface);
+
 fail2:
     Error("fail2\n");
     XENBUS_STORE(Release, &Fdo->StoreInterface);
+
 fail1:
     Error("fail1 (%08x)\n", status);
 
@@ -696,8 +721,10 @@ __FdoD0ToD3(
 
     __FdoSetDevicePowerState(Fdo, PowerDeviceD3);
 
-    XENBUS_STORE(Release, &Fdo->StoreInterface);
+    XENBUS_GNTTAB(DestroyCache, &Fdo->GnttabInterface, Fdo->GnttabCache);
+    XENBUS_GNTTAB(Release, &Fdo->GnttabInterface);
     XENBUS_EVTCHN(Release, &Fdo->EvtchnInterface);
+    XENBUS_STORE(Release, &Fdo->StoreInterface);
 
     Trace("<====\n");
 }
@@ -2289,6 +2316,15 @@ FdoCreate(
     if (!NT_SUCCESS(status))
         goto fail11;
 
+    status = FDO_QUERY_INTERFACE(Fdo,
+                                 XENBUS,
+                                 GNTTAB,
+                                 (PINTERFACE)&Fdo->GnttabInterface,
+                                 sizeof(Fdo->GnttabInterface),
+                                 FALSE);
+    if (!NT_SUCCESS(status))
+        goto fail12;
+
     InitializeMutex(&Fdo->Mutex);
     InitializeListHead(&Dx->ListEntry);
     Fdo->References = 1;
@@ -2299,15 +2335,18 @@ FdoCreate(
 
     status = ThreadCreate(FdoRegistryThreadHandler, Fdo, &Fdo->registryThread);
     if (!NT_SUCCESS(status))
-        goto fail12;
+        goto fail13;
 
     KeInitializeSpinLock(&Fdo->EvtchnLock);
     InitializeListHead(&Fdo->EvtchnList);
     ASSERT(FdoGlobal == NULL);
     FdoGlobal = Fdo;
-    status = PsSetCreateProcessNotifyRoutine(EvtchnProcessNotify, FALSE);
+    status = PsSetCreateProcessNotifyRoutine(XenifaceProcessNotify, FALSE);
     if (!NT_SUCCESS(status))
-        goto fail13;
+        goto fail14;
+
+    KeInitializeSpinLock(&Fdo->GnttabGrantLock);
+    InitializeListHead(&Fdo->GnttabGrantList);
 
     Info("%p (%s)\n",
          FunctionDeviceObject,
@@ -2318,10 +2357,21 @@ FdoCreate(
 
     return STATUS_SUCCESS;
 
-fail13:
+fail14:
     Error("fail14\n");
-fail12:
+
+    ThreadAlert(Fdo->registryThread);
+    ThreadJoin(Fdo->registryThread);
+    Fdo->registryThread = NULL;
+
+fail13:
     Error("fail13\n");
+
+    RtlZeroMemory(&Fdo->GnttabInterface,
+                  sizeof (XENBUS_GNTTAB_INTERFACE));
+
+fail12:
+    Error("fail12\n");
 
     RtlZeroMemory(&Fdo->EvtchnInterface,
                   sizeof(XENBUS_EVTCHN_INTERFACE));
@@ -2413,7 +2463,11 @@ FdoDestroy(
 
     Dx->Fdo = NULL;
 
-    PsSetCreateProcessNotifyRoutine(EvtchnProcessNotify, TRUE);
+    ASSERT(IsListEmpty(&Fdo->GnttabGrantList));
+    RtlZeroMemory(&Fdo->GnttabGrantList, sizeof(LIST_ENTRY));
+    RtlZeroMemory(&Fdo->GnttabGrantLock, sizeof(KSPIN_LOCK));
+
+    ASSERT(NT_SUCCESS(PsSetCreateProcessNotifyRoutine(XenifaceProcessNotify, TRUE)));
     FdoGlobal = NULL;
     ASSERT(IsListEmpty(&Fdo->EvtchnList));
     RtlZeroMemory(&Fdo->EvtchnList, sizeof(LIST_ENTRY));
@@ -2422,6 +2476,9 @@ FdoDestroy(
     RtlZeroMemory(&Fdo->Mutex, sizeof (XENIFACE_MUTEX));
 
     Fdo->InterfacesAcquired = FALSE;
+
+    RtlZeroMemory(&Fdo->GnttabInterface,
+                  sizeof(XENBUS_GNTTAB_INTERFACE));
 
     RtlZeroMemory(&Fdo->EvtchnInterface,
                   sizeof(XENBUS_EVTCHN_INTERFACE));

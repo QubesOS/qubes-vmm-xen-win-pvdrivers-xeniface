@@ -107,4 +107,50 @@ typedef struct _EVTCHN_NOTIFY_IN {
 #define IOCTL_XENIFACE_EVTCHN_RESET \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+/************************************************************************/
+/* gntmem ioctls                                                        */
+/************************************************************************/
+#define IOCTL_XENIFACE_GNTTAB_GRANT_PAGES \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x820, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef enum _GNTTAB_GRANT_PAGES_FLAGS
+{
+    GNTTAB_GRANT_PAGES_READONLY          = 1 << 0,
+    GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET = 1 << 1,
+    GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT   = 1 << 2
+} GNTTAB_GRANT_PAGES_FLAGS;
+
+typedef struct _GNTTAB_GRANT_PAGES_IN
+{
+    USHORT RemoteDomain;
+    ULONG NumberPages;
+    GNTTAB_GRANT_PAGES_FLAGS Flags;
+    ULONG NotifyOffset;
+    ULONG NotifyPort;
+} GNTTAB_GRANT_PAGES_IN, *PGNTTAB_GRANT_PAGES_IN;
+
+#pragma warning(push)
+#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
+typedef struct _GNTTAB_GRANT_PAGES_OUT
+{
+    PVOID Address;
+    PVOID Context;
+    ULONG References[0];
+} GNTTAB_GRANT_PAGES_OUT, *PGNTTAB_GRANT_PAGES_OUT;
+#pragma warning(pop)
+
+#define IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x821, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _GNTTAB_UNGRANT_PAGES_IN
+{
+    PVOID Context;
+} GNTTAB_UNGRANT_PAGES_IN, *PGNTTAB_UNGRANT_PAGES_IN;
+
+#define IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x822, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x823, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #endif // _XENIFACE_IOCTLS_H_

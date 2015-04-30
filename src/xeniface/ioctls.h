@@ -32,6 +32,8 @@
 #ifndef _IOCTLS_H_
 #define _IOCTLS_H_
 
+#include "xeniface_ioctls.h"
+
 typedef struct _XENIFACE_EVTCHN_CONTEXT {
     LIST_ENTRY Entry;
     PXENBUS_EVTCHN_CHANNEL Channel;
@@ -41,6 +43,20 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
     KDPC Dpc;
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 
+typedef struct _XENIFACE_GNTTAB_CONTEXT {
+    LIST_ENTRY Entry;
+    PXENBUS_GNTTAB_ENTRY *Grants;
+    PEPROCESS Process;
+    USHORT RemoteDomain;
+    ULONG NumberPages;
+    GNTTAB_GRANT_PAGES_FLAGS Flags;
+    ULONG NotifyOffset;
+    ULONG NotifyPort;
+    PVOID KernelVa;
+    PVOID UserVa;
+    PMDL Mdl;
+} XENIFACE_GNTTAB_CONTEXT, *PXENIFACE_GNTTAB_CONTEXT;
+
 NTSTATUS
 XenIFaceIoctl(
     __in  PXENIFACE_FDO     Fdo,
@@ -48,10 +64,22 @@ XenIFaceIoctl(
     );
 
 VOID
-EvtchnProcessNotify(
+XenifaceProcessNotify(
     __in HANDLE ParentId,
     __in HANDLE ProcessId,
     __in BOOLEAN Create
+    );
+
+__drv_requiresIRQL(DISPATCH_LEVEL)
+VOID
+GnttabAcquireLock(
+    __in PVOID Argument
+    );
+
+__drv_requiresIRQL(DISPATCH_LEVEL)
+VOID
+GnttabReleaseLock(
+    __in PVOID Argument
     );
 
 #endif // _IOCTLS_H_

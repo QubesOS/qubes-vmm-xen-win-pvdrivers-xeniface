@@ -285,6 +285,12 @@ fail1:
     return status;
 }
 
+NTSTATUS
+GnttabFreeGrant(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_GNTTAB_CONTEXT Context
+    );
+
 _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
@@ -297,14 +303,14 @@ EvtchnDpc(
     __in_opt PVOID Argument2
     )
 {
-    XENIFACE_EVTCHN_CONTEXT *Ctx = (XENIFACE_EVTCHN_CONTEXT *)Context;
+    PXENIFACE_EVTCHN_CONTEXT Ctx = (PXENIFACE_EVTCHN_CONTEXT)Context;
 
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(Argument1);
     UNREFERENCED_PARAMETER(Argument2);
     ASSERT(Context != NULL);
 
-    XenIfaceDebugPrint(TRACE, "Channel %p, LocalPort %d, IRQL %d\n", Ctx->Channel, Ctx->LocalPort, KeGetCurrentIrql());
+    XenIfaceDebugPrint(TRACE, "Signaled Channel %p, LocalPort %d, IRQL %d\n", Ctx->Channel, Ctx->LocalPort, KeGetCurrentIrql());
     KeSetEvent(Ctx->Event, 0, FALSE);
 }
 
@@ -314,16 +320,14 @@ _IRQL_requires_same_
 static DECLSPEC_NOINLINE
 BOOLEAN
 EvtchnCallback(
-    __in     struct _KINTERRUPT *Interrupt,
+    __in     PKINTERRUPT Interrupt,
     __in_opt PVOID Argument
     )
 {
-    XENIFACE_EVTCHN_CONTEXT *Context = (XENIFACE_EVTCHN_CONTEXT *)Argument;
+    PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument;
 
     UNREFERENCED_PARAMETER(Interrupt);
     ASSERT(Context != NULL);
-
-    XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, IRQL %d\n", Context->Channel, Context->LocalPort, KeGetCurrentIrql());
 
     // we're running at high irql, queue a dpc to signal the event
     KeInsertQueueDpc(&Context->Dpc, NULL, NULL);
@@ -335,21 +339,47 @@ static
 VOID
 EvtchnFree(
     __in PXENIFACE_FDO Fdo,
-    __in XENIFACE_EVTCHN_CONTEXT *Context
+    __in PXENIFACE_EVTCHN_CONTEXT Context
     )
 {
-    XenIfaceDebugPrint(INFO, "LocalPort %d, Process %p\n", Context->LocalPort, Context->Process);
+    XenIfaceDebugPrint(TRACE, "Record %p, LocalPort %d, Process %p\n", Context, Context->LocalPort, Context->Process);
     XENBUS_EVTCHN(Close, &Fdo->EvtchnInterface, Context->Channel);
     ObDereferenceObject(Context->Event);
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 }
 
+// EvtchnLock must be held
+static
+PXENIFACE_EVTCHN_CONTEXT
+EvtchnFindChannel(
+    __in PXENIFACE_FDO Fdo,
+    __in ULONG LocalPort
+)
+{
+    PXENIFACE_EVTCHN_CONTEXT Record, Found = NULL;
+    PLIST_ENTRY Node;
+
+    Node = Fdo->EvtchnList.Flink;
+    while (Node->Flink != Fdo->EvtchnList.Flink) {
+        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Record->LocalPort != LocalPort)
+            continue;
+
+        Found = Record;
+        break;
+    }
+
+    return Found;
+}
+
 // Process creation/destruction notify routine.
-// Used for cleaning up of allocated event channels.
+// Used for cleaning up of allocated event channels and grants.
 // Runs at PASSIVE_LEVEL and if Create==FALSE, in the context of the process being destroyed.
 VOID
-EvtchnProcessNotify(
+XenifaceProcessNotify(
     __in HANDLE ParentId,
     __in HANDLE ProcessId,
     __in BOOLEAN Create
@@ -357,8 +387,10 @@ EvtchnProcessNotify(
 {
     PEPROCESS CurrentProcess;
     PLIST_ENTRY Node;
-    XENIFACE_EVTCHN_CONTEXT *Record;
+    PXENIFACE_EVTCHN_CONTEXT EvtchnRecord;
+    PXENIFACE_GNTTAB_CONTEXT GnttabRecord;
     KIRQL Irql;
+    LIST_ENTRY ToFree;
 
     UNREFERENCED_PARAMETER(ParentId);
     UNREFERENCED_PARAMETER(ProcessId);
@@ -369,21 +401,48 @@ EvtchnProcessNotify(
 
     CurrentProcess = PsGetCurrentProcess();
 
-    // Walk the list, find everything that's allocated by this process and still not freed.
+    // event channels
     KeAcquireSpinLock(&FdoGlobal->EvtchnLock, &Irql);
     Node = FdoGlobal->EvtchnList.Flink;
     while (Node->Flink != FdoGlobal->EvtchnList.Flink) {
-        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+        EvtchnRecord = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
 
         Node = Node->Flink;
-        if (Record->Process != CurrentProcess)
+        if (EvtchnRecord->Process != CurrentProcess)
             continue;
 
-        XenIfaceDebugPrint(INFO, "Process %p\n", CurrentProcess);
-        RemoveEntryList(&Record->Entry);
-        EvtchnFree(FdoGlobal, Record);
+        XenIfaceDebugPrint(TRACE, "Process %p, EvtchnRecord %p\n", CurrentProcess, EvtchnRecord);
+        RemoveEntryList(&EvtchnRecord->Entry);
+        EvtchnFree(FdoGlobal, EvtchnRecord);
     }
     KeReleaseSpinLock(&FdoGlobal->EvtchnLock, Irql);
+
+    // grants
+    InitializeListHead(&ToFree);
+    KeAcquireSpinLock(&FdoGlobal->GnttabGrantLock, &Irql);
+    Node = FdoGlobal->GnttabGrantList.Flink;
+    while (Node->Flink != FdoGlobal->GnttabGrantList.Flink) {
+        GnttabRecord = CONTAINING_RECORD(Node, XENIFACE_GNTTAB_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (GnttabRecord->Process != CurrentProcess)
+            continue;
+
+        XenIfaceDebugPrint(TRACE, "Process %p, GnttabRecord %p\n", CurrentProcess, GnttabRecord);
+        // can't free/unmap user memory here since locks raise IRQL to DPC_LEVEL
+        RemoveEntryList(&GnttabRecord->Entry);
+        InsertTailList(&ToFree, &GnttabRecord->Entry);
+    }
+    KeReleaseSpinLock(&FdoGlobal->GnttabGrantLock, Irql);
+
+    Node = ToFree.Flink;
+    while (Node->Flink != ToFree.Flink) {
+        GnttabRecord = CONTAINING_RECORD(Node, XENIFACE_GNTTAB_CONTEXT, Entry);
+        Node = Node->Flink;
+
+        RemoveEntryList(&GnttabRecord->Entry);
+        GnttabFreeGrant(FdoGlobal, GnttabRecord);
+    }
 }
 
 static DECLSPEC_NOINLINE
@@ -397,9 +456,9 @@ IoctlEvtchnBindUnboundPort(
     )
 {
     NTSTATUS status;
-    EVTCHN_BIND_UNBOUND_PORT_IN *In = (EVTCHN_BIND_UNBOUND_PORT_IN *)Buffer;
-    EVTCHN_BIND_UNBOUND_PORT_OUT *Out = (EVTCHN_BIND_UNBOUND_PORT_OUT *)Buffer;
-    XENIFACE_EVTCHN_CONTEXT *Context;
+    PEVTCHN_BIND_UNBOUND_PORT_IN In = (PEVTCHN_BIND_UNBOUND_PORT_IN)Buffer;
+    PEVTCHN_BIND_UNBOUND_PORT_OUT Out = (PEVTCHN_BIND_UNBOUND_PORT_OUT)Buffer;
+    PXENIFACE_EVTCHN_CONTEXT Context;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
@@ -480,9 +539,9 @@ IoctlEvtchnBindInterdomain(
     )
 {
     NTSTATUS status;
-    EVTCHN_BIND_INTERDOMAIN_IN *In = (EVTCHN_BIND_INTERDOMAIN_IN *)Buffer;
-    EVTCHN_BIND_INTERDOMAIN_OUT *Out = (EVTCHN_BIND_INTERDOMAIN_OUT *)Buffer;
-    XENIFACE_EVTCHN_CONTEXT *Context;
+    PEVTCHN_BIND_INTERDOMAIN_IN In = (PEVTCHN_BIND_INTERDOMAIN_IN)Buffer;
+    PEVTCHN_BIND_INTERDOMAIN_OUT Out = (PEVTCHN_BIND_INTERDOMAIN_OUT)Buffer;
+    PXENIFACE_EVTCHN_CONTEXT Context;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
@@ -565,38 +624,64 @@ IoctlEvtchnClose(
     )
 {
     NTSTATUS status;
-    EVTCHN_CLOSE_IN *In = (EVTCHN_CLOSE_IN *)Buffer;
-    XENIFACE_EVTCHN_CONTEXT *Record, *Found = NULL;
-    PLIST_ENTRY Node;
+    PEVTCHN_CLOSE_IN In = (PEVTCHN_CLOSE_IN)Buffer;
+    PXENIFACE_EVTCHN_CONTEXT Record = NULL;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(EVTCHN_CLOSE_IN) || OutLen != 0)
         goto fail1;
 
-    XenIfaceDebugPrint(INFO, "(LocalPort %d)\n", In->LocalPort);
+    XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-    Node = Fdo->EvtchnList.Flink;
-    while (Node->Flink != Fdo->EvtchnList.Flink) {
-        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
-
-        Node = Node->Flink;
-        if (Record->LocalPort != In->LocalPort)
-            continue;
-
+    Record = EvtchnFindChannel(Fdo, In->LocalPort);
+    if (Record != NULL)
         RemoveEntryList(&Record->Entry);
-        Found = Record;
-    }
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
     status = STATUS_INVALID_PARAMETER;
-    if (Found == NULL)
+    if (Record == NULL)
         goto fail2;
 
-    XenIfaceDebugPrint(INFO, "Context %p\n", Found);
+    XenIfaceDebugPrint(TRACE, "Context %p\n", Record);
 
-    EvtchnFree(Fdo, Found);
+    EvtchnFree(Fdo, Record);
+
+    return STATUS_SUCCESS;
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+EvtchnNotify(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PEPROCESS         Process,
+    __in  ULONG             LocalPort
+    )
+{
+    NTSTATUS status;
+    PXENIFACE_EVTCHN_CONTEXT Record = NULL;
+    KIRQL Irql;
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    Record = EvtchnFindChannel(Fdo, LocalPort);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    status = STATUS_NOT_FOUND;
+    if (Record == NULL)
+        goto fail1;
+
+    status = STATUS_ACCESS_DENIED;
+    if (Record->Process != Process)
+        goto fail2;
+
+    XENBUS_EVTCHN(Send, &Fdo->EvtchnInterface, Record->Channel);
 
     return STATUS_SUCCESS;
 
@@ -617,48 +702,311 @@ IoctlEvtchnNotify(
     )
 {
     NTSTATUS status;
-    EVTCHN_NOTIFY_IN *In = (EVTCHN_NOTIFY_IN *)Buffer;
-    XENIFACE_EVTCHN_CONTEXT *Record, *Found = NULL;
-    PLIST_ENTRY Node;
-    KIRQL Irql;
+    PEVTCHN_NOTIFY_IN In = (PEVTCHN_NOTIFY_IN)Buffer;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(EVTCHN_NOTIFY_IN) || OutLen != 0)
         goto fail1;
 
-    XenIfaceDebugPrint(INFO, "(LocalPort %d)\n", In->LocalPort);
+    XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
 
-    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-    Node = Fdo->EvtchnList.Flink;
-    while (Node->Flink != Fdo->EvtchnList.Flink) {
-        Record = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+    return EvtchnNotify(Fdo, PsGetCurrentProcess(), In->LocalPort);
 
-        Node = Node->Flink;
-        if (Record->LocalPort != In->LocalPort)
-            continue;
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
 
-        Found = Record;
+__drv_requiresIRQL(DISPATCH_LEVEL)
+VOID
+GnttabAcquireLock(
+    __in PVOID Argument
+    )
+{
+    PXENIFACE_FDO Fdo = Argument;
+
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+
+    KeAcquireSpinLockAtDpcLevel(&Fdo->GnttabGrantLock);
+}
+
+__drv_requiresIRQL(DISPATCH_LEVEL)
+VOID
+GnttabReleaseLock(
+    __in PVOID Argument
+    )
+{
+    PXENIFACE_FDO Fdo = Argument;
+
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+
+#pragma prefast(suppress:26110)
+    KeReleaseSpinLockFromDpcLevel(&Fdo->GnttabGrantLock);
+}
+
+DECLSPEC_NOINLINE
+NTSTATUS
+GnttabFreeGrant(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_GNTTAB_CONTEXT Context
+    )
+{
+    NTSTATUS status;
+    ULONG Page;
+
+    ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+
+    XenIfaceDebugPrint(INFO, "Record %p\n", Context);
+
+    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) {
+        ((PCHAR)Context->KernelVa)[Context->NotifyOffset] = 0;
     }
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
-    status = STATUS_INVALID_PARAMETER;
-    if (Found == NULL)
-        goto fail2;
+    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT) {
+        status = EvtchnNotify(Fdo, PsGetCurrentProcess(), Context->NotifyPort);
 
-    XenIfaceDebugPrint(INFO, "Context %p\n", Found);
+        if (!NT_SUCCESS(status)) // non-fatal, we must free memory
+            XenIfaceDebugPrint(ERROR, "failed to notify port %lu: 0x%x\n", Context->NotifyPort, status);
+    }
 
-    status = STATUS_ACCESS_DENIED;
-    if (Found->Process != PsGetCurrentProcess())
-        goto fail3;
+    // unmap from user address space
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
 
-    XENBUS_EVTCHN(Send, &Fdo->EvtchnInterface, Found->Channel);
+    // stop sharing
+    for (Page = 0; Page < Context->NumberPages; Page++) {
+        status = XENBUS_GNTTAB(RevokeForeignAccess,
+                               &Fdo->GnttabInterface,
+                               Fdo->GnttabCache,
+                               FALSE,
+                               Context->Grants[Page]);
+
+        if (!NT_SUCCESS(status))
+            goto fail1;
+    }
+
+    IoFreeMdl(Context->Mdl);
+
+    RtlZeroMemory(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
+    ExFreePoolWithTag(Context->KernelVa, XENIFACE_POOL_TAG);
+
+    RtlZeroMemory(Context->Grants, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY));
+    ExFreePoolWithTag(Context->Grants, XENIFACE_POOL_TAG);
+
+    RtlZeroMemory(Context, sizeof(XENIFACE_GNTTAB_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 
     return STATUS_SUCCESS;
 
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x), leaking memory: buffer %p size 0x%x\n",
+                       status, Context->KernelVa, Context->NumberPages * PAGE_SIZE);
+    // we can't free the memory since the foreign domain still can access it
+
+    IoFreeMdl(Context->Mdl);
+    RtlZeroMemory(Context->Grants, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY));
+    ExFreePoolWithTag(Context->Grants, XENIFACE_POOL_TAG);
+    RtlZeroMemory(Context, sizeof(XENIFACE_GNTTAB_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabGrantPages(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    )
+{
+    NTSTATUS status;
+    PGNTTAB_GRANT_PAGES_IN In = (PGNTTAB_GRANT_PAGES_IN)Buffer;
+    PGNTTAB_GRANT_PAGES_OUT Out = (PGNTTAB_GRANT_PAGES_OUT)Buffer;
+    PXENIFACE_GNTTAB_CONTEXT Context;
+    KIRQL Irql;
+    ULONG Page;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(GNTTAB_GRANT_PAGES_IN))
+        goto fail1;
+
+    status = STATUS_INVALID_PARAMETER;
+    if ((In->NumberPages == 0) || (In->NumberPages > 1024 * 1024) ||
+        ((In->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
+        )
+        goto fail2;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (OutLen != (sizeof(GNTTAB_GRANT_PAGES_OUT) + sizeof(ULONG) * In->NumberPages))
+        goto fail3;
+
+    status = STATUS_NO_MEMORY;
+    Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_GNTTAB_CONTEXT), XENIFACE_POOL_TAG);
+    if (Context == NULL)
+        goto fail4;
+
+    RtlZeroMemory(Context, sizeof(XENIFACE_GNTTAB_CONTEXT));
+    Context->Process = PsGetCurrentProcess();
+    Context->RemoteDomain = In->RemoteDomain;
+    Context->NumberPages = In->NumberPages;
+    Context->Flags = In->Flags;
+    Context->NotifyOffset = In->NotifyOffset;
+    Context->NotifyPort = In->NotifyPort;
+
+    XenIfaceDebugPrint(INFO, "> (RemoteDomain %d, NumberPages %lu, Flags 0x%x, Offset 0x%x, Port %d) Process %p\n",
+                       Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort, Context->Process);
+
+    status = STATUS_NO_MEMORY;
+    Context->Grants = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY), XENIFACE_POOL_TAG);
+    if (Context->Grants == NULL)
+        goto fail5;
+
+    RtlZeroMemory(Context->Grants, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY));
+
+    // allocate memory to share
+    status = STATUS_NO_MEMORY;
+    Context->KernelVa = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * PAGE_SIZE, XENIFACE_POOL_TAG);
+    if (Context->KernelVa == NULL)
+        goto fail6;
+
+    RtlZeroMemory(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
+    Context->Mdl = IoAllocateMdl(Context->KernelVa, Context->NumberPages * PAGE_SIZE, FALSE, FALSE, NULL);
+    if (Context->Mdl == NULL)
+        goto fail7;
+
+    MmBuildMdlForNonPagedPool(Context->Mdl);
+    ASSERT(MmGetMdlByteCount(Context->Mdl) == Context->NumberPages * PAGE_SIZE);
+
+    // perform sharing
+    for (Page = 0; Page < Context->NumberPages; Page++) {
+        status = XENBUS_GNTTAB(PermitForeignAccess,
+                               &Fdo->GnttabInterface,
+                               Fdo->GnttabCache,
+                               FALSE,
+                               Context->RemoteDomain,
+                               MmGetMdlPfnArray(Context->Mdl)[Page],
+                               (Context->Flags & GNTTAB_GRANT_PAGES_READONLY) != 0,
+                               &(Context->Grants[Page]));
+
+// prefast somehow thinks that this call can modify Page...
+#pragma prefast(suppress:6385)
+        XenIfaceDebugPrint(TRACE, "Grants[%lu] = %p\n", Page, Context->Grants[Page]);
+        if (!NT_SUCCESS(status))
+            goto fail8;
+    }
+
+    // map into user mode
+    __try {
+        Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        status = GetExceptionCode();
+        goto fail8;
+    }
+
+    XenIfaceDebugPrint(INFO, "Record %p, KernelVa %p, UserVa %p\n", Context, Context->KernelVa, Context->UserVa);
+
+    // set output values
+    Out->Context = Context;
+    Out->Address = Context->UserVa;
+    for (Page = 0; Page < Context->NumberPages; Page++) {
+        Out->References[Page] = XENBUS_GNTTAB(GetReference,
+                                              &Fdo->GnttabInterface,
+                                              Context->Grants[Page]);
+        XenIfaceDebugPrint(TRACE, "Ref[%lu] = %lu\n", Page, Out->References[Page]);
+    }
+
+    KeAcquireSpinLock(&Fdo->GnttabGrantLock, &Irql);
+    InsertTailList(&Fdo->GnttabGrantList, &Context->Entry);
+    KeReleaseSpinLock(&Fdo->GnttabGrantLock, Irql);
+
+    *Info = sizeof(GNTTAB_GRANT_PAGES_OUT) + sizeof(ULONG) * Context->NumberPages;
+
+    return STATUS_SUCCESS;
+
+fail8:
+    XenIfaceDebugPrint(ERROR, "Fail8: Page = %lu\n", Page);
+
+    while (Page > 0) {
+        ASSERT(NT_SUCCESS(XENBUS_GNTTAB(RevokeForeignAccess,
+                                        &Fdo->GnttabInterface,
+                                        Fdo->GnttabCache,
+                                        FALSE,
+                                        Context->Grants[Page - 1])));
+
+        --Page;
+    }
+    IoFreeMdl(Context->Mdl);
+
+fail7:
+    XenIfaceDebugPrint(ERROR, "Fail7\n");
+    ExFreePoolWithTag(Context->KernelVa, XENIFACE_POOL_TAG);
+
+fail6:
+    XenIfaceDebugPrint(ERROR, "Fail6\n");
+    ExFreePoolWithTag(Context->Grants, XENIFACE_POOL_TAG);
+
+fail5:
+    XenIfaceDebugPrint(ERROR, "Fail5\n");
+    RtlZeroMemory(Context, sizeof(XENIFACE_GNTTAB_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+
+fail4:
+    XenIfaceDebugPrint(ERROR, "Fail4\n");
+
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabUngrantPages(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    PGNTTAB_UNGRANT_PAGES_IN In = (PGNTTAB_UNGRANT_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_CONTEXT Context = NULL;
+    KIRQL Irql;
+    PLIST_ENTRY Node;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(GNTTAB_UNGRANT_PAGES_IN))
+        goto fail1;
+
+    KeAcquireSpinLock(&Fdo->GnttabGrantLock, &Irql);
+    Node = Fdo->GnttabGrantList.Flink;
+    while (Node->Flink != Fdo->GnttabGrantList.Flink) {
+        Context = CONTAINING_RECORD(Node, XENIFACE_GNTTAB_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Context != In->Context)
+            continue;
+
+        RemoveEntryList(&Context->Entry);
+        break;
+    }
+    KeReleaseSpinLock(&Fdo->GnttabGrantLock, Irql);
+
+    status = STATUS_NOT_FOUND;
+    if (Context == NULL)
+        goto fail2;
+
+    return GnttabFreeGrant(Fdo, Context);
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2");
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -713,6 +1061,15 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_EVTCHN_NOTIFY:
         status = IoctlEvtchnNotify(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+        // gnttab
+    case IOCTL_XENIFACE_GNTTAB_GRANT_PAGES:
+        status = IoctlGnttabGrantPages(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        break;
+
+    case IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES:
+        status = IoctlGnttabUngrantPages(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
     default:

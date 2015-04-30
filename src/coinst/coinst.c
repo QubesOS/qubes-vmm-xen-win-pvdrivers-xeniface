@@ -44,6 +44,7 @@
 #include <shared_info_interface.h>
 #include <store_interface.h>
 #include <evtchn_interface.h>
+#include <gnttab_interface.h>
 
 #include <version.h>
 
@@ -397,6 +398,7 @@ DifInstallPostProcess(
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, SHARED_INFO);
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, STORE);
     SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, EVTCHN);
+    SUBSCRIBE_INTERFACE(XENBUS, XENIFACE, GNTTAB);
 
     Log("<====");
 
