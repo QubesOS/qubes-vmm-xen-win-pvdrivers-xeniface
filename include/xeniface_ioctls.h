@@ -50,18 +50,6 @@ DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
 /************************************************************************/
 /* evtchn ioctls                                                        */
 /************************************************************************/
-#define IOCTL_XENIFACE_EVTCHN_BIND_VIRQ \
-    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x810, METHOD_BUFFERED, FILE_ANY_ACCESS)
-
-typedef struct _EVTCHN_BIND_VIRQ_IN {
-    ULONG Virq;
-    HANDLE Event;
-} EVTCHN_BIND_VIRQ_IN, *PEVTCHN_BIND_VIRQ_IN;
-
-typedef struct _EVTCHN_BIND_VIRQ_OUT {
-    ULONG LocalPort;
-} EVTCHN_BIND_VIRQ_OUT, *PEVTCHN_BIND_VIRQ_OUT;
-
 #define IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
@@ -103,9 +91,6 @@ typedef struct _EVTCHN_CLOSE_IN {
 typedef struct _EVTCHN_NOTIFY_IN {
     ULONG LocalPort;
 } EVTCHN_NOTIFY_IN, *PEVTCHN_NOTIFY_IN;
-
-#define IOCTL_XENIFACE_EVTCHN_RESET \
-    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 /************************************************************************/
 /* gntmem ioctls                                                        */
