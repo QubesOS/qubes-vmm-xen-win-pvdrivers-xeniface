@@ -150,7 +150,31 @@ typedef struct _GNTTAB_UNGRANT_PAGES_IN
 #define IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x822, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
+#pragma warning(push)
+#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
+typedef struct _GNTTAB_MAP_FOREIGN_PAGES_IN
+{
+    USHORT RemoteDomain;
+    ULONG NumberPages;
+    GNTTAB_GRANT_PAGES_FLAGS Flags;
+    ULONG NotifyOffset;
+    ULONG NotifyPort;
+    ULONG References[0];
+} GNTTAB_MAP_FOREIGN_PAGES_IN, *PGNTTAB_MAP_FOREIGN_PAGES_IN;
+#pragma warning(pop)
+
+typedef struct _GNTTAB_MAP_FOREIGN_PAGES_OUT
+{
+    PVOID Address;
+    PVOID Context;
+} GNTTAB_MAP_FOREIGN_PAGES_OUT, *PGNTTAB_MAP_FOREIGN_PAGES_OUT;
+
 #define IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x823, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _GNTTAB_UNMAP_FOREIGN_PAGES_IN
+{
+    PVOID Context;
+} GNTTAB_UNMAP_FOREIGN_PAGES_IN, *PGNTTAB_UNMAP_FOREIGN_PAGES_IN;
 
 #endif // _XENIFACE_IOCTLS_H_

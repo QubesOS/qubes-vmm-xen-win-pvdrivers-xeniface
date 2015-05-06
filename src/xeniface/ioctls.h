@@ -43,7 +43,7 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
     KDPC Dpc;
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 
-typedef struct _XENIFACE_GNTTAB_CONTEXT {
+typedef struct _XENIFACE_GRANT_CONTEXT {
     LIST_ENTRY Entry;
     PXENBUS_GNTTAB_ENTRY *Grants;
     PEPROCESS Process;
@@ -55,7 +55,22 @@ typedef struct _XENIFACE_GNTTAB_CONTEXT {
     PVOID KernelVa;
     PVOID UserVa;
     PMDL Mdl;
-} XENIFACE_GNTTAB_CONTEXT, *PXENIFACE_GNTTAB_CONTEXT;
+} XENIFACE_GRANT_CONTEXT, *PXENIFACE_GRANT_CONTEXT;
+
+typedef struct _XENIFACE_MAP_CONTEXT {
+    LIST_ENTRY Entry;
+    ULONG *Handles;
+    PEPROCESS Process;
+    USHORT RemoteDomain;
+    ULONG NumberPages;
+    GNTTAB_GRANT_PAGES_FLAGS Flags;
+    ULONG NotifyOffset;
+    ULONG NotifyPort;
+    PHYSICAL_ADDRESS Address;
+    PVOID KernelVa;
+    PVOID UserVa;
+    PMDL Mdl;
+} XENIFACE_MAP_CONTEXT, *PXENIFACE_MAP_CONTEXT;
 
 NTSTATUS
 XenIFaceIoctl(
@@ -80,6 +95,18 @@ __drv_requiresIRQL(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
     __in PVOID Argument
+    );
+
+NTSTATUS
+GnttabFreeGrant(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_GRANT_CONTEXT Context
+    );
+
+NTSTATUS
+GnttabFreeMap(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_MAP_CONTEXT Context
     );
 
 #endif // _IOCTLS_H_

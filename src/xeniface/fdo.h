@@ -90,6 +90,8 @@ typedef struct _XENIFACE_FDO {
     PXENBUS_GNTTAB_CACHE            GnttabCache;
     KSPIN_LOCK                      GnttabGrantLock;
     LIST_ENTRY                      GnttabGrantList;
+    KSPIN_LOCK                      GnttabMapLock;
+    LIST_ENTRY                      GnttabMapList;
 
     #define MAX_SESSIONS    (65536)
 

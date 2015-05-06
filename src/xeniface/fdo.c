@@ -2347,6 +2347,8 @@ FdoCreate(
 
     KeInitializeSpinLock(&Fdo->GnttabGrantLock);
     InitializeListHead(&Fdo->GnttabGrantList);
+    KeInitializeSpinLock(&Fdo->GnttabMapLock);
+    InitializeListHead(&Fdo->GnttabMapList);
 
     Info("%p (%s)\n",
          FunctionDeviceObject,
@@ -2466,6 +2468,9 @@ FdoDestroy(
     ASSERT(IsListEmpty(&Fdo->GnttabGrantList));
     RtlZeroMemory(&Fdo->GnttabGrantList, sizeof(LIST_ENTRY));
     RtlZeroMemory(&Fdo->GnttabGrantLock, sizeof(KSPIN_LOCK));
+    ASSERT(IsListEmpty(&Fdo->GnttabMapList));
+    RtlZeroMemory(&Fdo->GnttabMapList, sizeof(LIST_ENTRY));
+    RtlZeroMemory(&Fdo->GnttabMapLock, sizeof(KSPIN_LOCK));
 
     ASSERT(NT_SUCCESS(PsSetCreateProcessNotifyRoutine(XenifaceProcessNotify, TRUE)));
     FdoGlobal = NULL;
