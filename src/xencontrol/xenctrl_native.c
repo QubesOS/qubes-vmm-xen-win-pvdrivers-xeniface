@@ -13,6 +13,9 @@ static XENIFACE_LOG_LEVEL g_LogLevel = XLL_INFO;
 #if defined (_DEBUG) || defined(DEBUG) || defined(DBG)
 #   define FUNCTION_ENTER() _Log(XLL_TRACE, __FUNCTION__, L"-->")
 #   define FUNCTION_EXIT() _Log(XLL_TRACE, __FUNCTION__, L"<--")
+#else
+#   define FUNCTION_ENTER()
+#   define FUNCTION_EXIT()
 #endif
 
 void XenifaceSetLogLevel(
