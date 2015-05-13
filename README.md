@@ -7,6 +7,10 @@ The XenIface package consists of a single device driver:
      by XenBus and provides a WMI to xenstore (and also an IOCTL interface
      for simple xenstore read/write access).
 
+*    xencontrol.dll is a DLL that provides user mode access to the XenIface
+     device by wrapping IOCTLs in easy to use functions. See xenctrl_native.h
+     for API details.
+
 Quick Start Guide
 =================
 
@@ -44,6 +48,11 @@ This will create a debug build of the driver. To create a non-debug build
 type:
 
     build.py free
+
+You can add a "nosdv" option to skip running the static driver verifier, like
+so:
+
+    build.py checked nosdv
 
 Installing the driver
 ---------------------
