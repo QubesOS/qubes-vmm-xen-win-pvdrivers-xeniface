@@ -76,6 +76,12 @@ DWORD EvtchnNotify(
     );
 
 XENCONTROL_API
+DWORD EvtchnUnmask(
+    IN  HANDLE iface,
+    IN  ULONG localPort
+    );
+
+XENCONTROL_API
 DWORD GnttabGrantPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
