@@ -308,6 +308,42 @@ fail:
     return GetLastError();
 }
 
+DWORD EvtchnUnmask(
+    IN  HANDLE iface,
+    IN  ULONG localPort
+    )
+{
+    EVTCHN_UNMASK_IN in;
+    DWORD returned;
+    BOOL success;
+
+    FUNCTION_ENTER();
+
+    in.LocalPort = localPort;
+
+    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
+    success = DeviceIoControl(iface,
+                              IOCTL_XENIFACE_EVTCHN_UNMASK,
+                              &in, sizeof(in),
+                              NULL, 0,
+                              &returned,
+                              NULL);
+
+    if (!success)
+    {
+        Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_UNMASK failed");
+        goto fail;
+    }
+
+    FUNCTION_EXIT();
+    return ERROR_SUCCESS;
+
+fail:
+    Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
+    FUNCTION_EXIT();
+    return GetLastError();
+}
+
 DWORD GnttabGrantPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,

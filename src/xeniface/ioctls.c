@@ -739,6 +739,49 @@ fail1:
     return status;
 }
 
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnUnmask(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    PEVTCHN_UNMASK_IN In = (PEVTCHN_UNMASK_IN)Buffer;
+    PXENIFACE_EVTCHN_CONTEXT Record = NULL;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_UNMASK_IN) || OutLen != 0)
+        goto fail1;
+
+    XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+    Record = EvtchnFindChannel(Fdo, In->LocalPort);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (Record == NULL)
+        goto fail2;
+
+    XENBUS_EVTCHN(Unmask,
+                  &Fdo->EvtchnInterface,
+                  Record->Channel,
+                  FALSE);
+
+    return STATUS_SUCCESS;
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
 __drv_requiresIRQL(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
@@ -1331,6 +1374,10 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_EVTCHN_NOTIFY:
         status = IoctlEvtchnNotify(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+    case IOCTL_XENIFACE_EVTCHN_UNMASK:
+        status = IoctlEvtchnUnmask(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
         // gnttab

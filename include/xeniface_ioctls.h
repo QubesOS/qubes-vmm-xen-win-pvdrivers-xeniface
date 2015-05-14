@@ -88,9 +88,18 @@ typedef struct _EVTCHN_CLOSE_IN {
 #define IOCTL_XENIFACE_EVTCHN_NOTIFY \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x814, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-typedef struct _EVTCHN_NOTIFY_IN {
+typedef struct _EVTCHN_NOTIFY_IN
+{
     ULONG LocalPort;
 } EVTCHN_NOTIFY_IN, *PEVTCHN_NOTIFY_IN;
+
+#define IOCTL_XENIFACE_EVTCHN_UNMASK \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_UNMASK_IN
+{
+    ULONG LocalPort;
+} EVTCHN_UNMASK_IN, *PEVTCHN_UNMASK_IN;
 
 /************************************************************************/
 /* gntmem ioctls                                                        */
