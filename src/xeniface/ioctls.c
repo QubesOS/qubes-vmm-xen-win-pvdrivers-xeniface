@@ -517,11 +517,11 @@ IoctlEvtchnBindUnboundPort(
                                        &Fdo->EvtchnInterface,
                                        Context->Channel);
 
+    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
+
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     InsertTailList(&Fdo->EvtchnList, &Context->Entry);
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
-
-    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     Out->LocalPort = Context->LocalPort;
     *Info = sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT);
@@ -601,11 +601,11 @@ IoctlEvtchnBindInterdomain(
                                        &Fdo->EvtchnInterface,
                                        Context->Channel);
 
+    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
+
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     InsertTailList(&Fdo->EvtchnList, &Context->Entry);
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
-
-    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     Out->LocalPort = Context->LocalPort;
 
@@ -658,8 +658,10 @@ IoctlEvtchnClose(
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     Record = EvtchnFindChannel(Fdo, In->LocalPort);
-    if (Record != NULL)
+    if (Record != NULL) {
         RemoveEntryList(&Record->Entry);
+        EvtchnFree(Fdo, Record);
+    }
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
     status = STATUS_INVALID_PARAMETER;
@@ -667,8 +669,6 @@ IoctlEvtchnClose(
         goto fail2;
 
     XenIfaceDebugPrint(TRACE, "Context %p\n", Record);
-
-    EvtchnFree(Fdo, Record);
 
     return STATUS_SUCCESS;
 
@@ -692,8 +692,8 @@ EvtchnNotify(
     KIRQL Irql;
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+
     Record = EvtchnFindChannel(Fdo, LocalPort);
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
     status = STATUS_NOT_FOUND;
     if (Record == NULL)
@@ -705,11 +705,14 @@ EvtchnNotify(
 
     XENBUS_EVTCHN(Send, &Fdo->EvtchnInterface, Record->Channel);
 
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
     return STATUS_SUCCESS;
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
 fail1:
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
@@ -760,8 +763,8 @@ IoctlEvtchnUnmask(
     XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+
     Record = EvtchnFindChannel(Fdo, In->LocalPort);
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
     status = STATUS_INVALID_PARAMETER;
     if (Record == NULL)
@@ -772,9 +775,12 @@ IoctlEvtchnUnmask(
                   Record->Channel,
                   FALSE);
 
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
     return STATUS_SUCCESS;
 
 fail2:
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
     XenIfaceDebugPrint(ERROR, "Fail2\n");
 
 fail1:
