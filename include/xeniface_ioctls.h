@@ -1,31 +1,31 @@
 /* Copyright (c) Citrix Systems Inc.
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, 
- * with or without modification, are permitted provided 
+ * Redistribution and use in source and binary forms,
+ * with or without modification, are permitted provided
  * that the following conditions are met:
  *
- * *   Redistributions of source code must retain the above 
- *     copyright notice, this list of conditions and the 
+ * *   Redistributions of source code must retain the above
+ *     copyright notice, this list of conditions and the
  *     following disclaimer.
- * *   Redistributions in binary form must reproduce the above 
- *     copyright notice, this list of conditions and the 
- *     following disclaimer in the documentation and/or other 
+ * *   Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the
+ *     following disclaimer in the documentation and/or other
  *     materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND 
- * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
- * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
 
@@ -33,7 +33,7 @@
 #define _XENIFACE_IOCTLS_H_
 
 DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
-    0xb2cfb085, 0xaa5e, 0x47e1, 0x8b, 0xf7, 0x97, 0x93, 0xf3, 0x15, 0x45, 0x65);
+            0xb2cfb085, 0xaa5e, 0x47e1, 0x8b, 0xf7, 0x97, 0x93, 0xf3, 0x15, 0x45, 0x65);
 
 /************************************************************************/
 /* store ioctls                                                         */
@@ -87,14 +87,16 @@ typedef struct _STORE_SET_PERMISSIONS_IN
 #define IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x811, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-typedef struct _EVTCHN_BIND_INTERDOMAIN_IN {
+typedef struct _EVTCHN_BIND_INTERDOMAIN_IN
+{
     USHORT RemoteDomain;
     ULONG RemotePort;
     BOOLEAN Mask;
     HANDLE Event;
 } EVTCHN_BIND_INTERDOMAIN_IN, *PEVTCHN_BIND_INTERDOMAIN_IN;
 
-typedef struct _EVTCHN_BIND_INTERDOMAIN_OUT {
+typedef struct _EVTCHN_BIND_INTERDOMAIN_OUT
+{
     ULONG LocalPort;
 } EVTCHN_BIND_INTERDOMAIN_OUT, *PEVTCHN_BIND_INTERDOMAIN_OUT;
 
@@ -108,14 +110,16 @@ typedef struct _EVTCHN_BIND_UNBOUND_PORT_IN
     HANDLE Event;
 } EVTCHN_BIND_UNBOUND_PORT_IN, *PEVTCHN_BIND_UNBOUND_PORT_IN;
 
-typedef struct _EVTCHN_BIND_UNBOUND_PORT_OUT {
+typedef struct _EVTCHN_BIND_UNBOUND_PORT_OUT
+{
     ULONG LocalPort;
 } EVTCHN_BIND_UNBOUND_PORT_OUT, *PEVTCHN_BIND_UNBOUND_PORT_OUT;
 
 #define IOCTL_XENIFACE_EVTCHN_CLOSE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x813, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-typedef struct _EVTCHN_CLOSE_IN {
+typedef struct _EVTCHN_CLOSE_IN
+{
     ULONG LocalPort;
 } EVTCHN_CLOSE_IN, *PEVTCHN_CLOSE_IN;
 
@@ -145,7 +149,7 @@ typedef enum _GNTTAB_GRANT_PAGES_FLAGS
 {
     GNTTAB_GRANT_PAGES_READONLY          = 1 << 0,
     GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET = 1 << 1,
-    GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT   = 1 << 2
+    GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT   = 1 << 2,
 } GNTTAB_GRANT_PAGES_FLAGS;
 
 typedef struct _GNTTAB_GRANT_PAGES_IN
