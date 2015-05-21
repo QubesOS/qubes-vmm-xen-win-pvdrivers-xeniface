@@ -160,7 +160,7 @@ IoctlStoreRead(
 
     status = STATUS_BUFFER_OVERFLOW;
     if (OutLen == 0) {
-        XenIfaceDebugPrint(INFO, "|%s: (\"%s\")=(%d)\n", __FUNCTION__, Buffer, Length);
+        XenIfaceDebugPrint(INFO, "(\"%s\")=(%d)\n", Buffer, Length);
         goto done;
     }
 
@@ -168,7 +168,7 @@ IoctlStoreRead(
     if (OutLen < Length)
         goto fail4;
 
-    XenIfaceDebugPrint(INFO, "|%s: (\"%s\")=(%d)->\"%s\"\n", __FUNCTION__, Buffer, Length, Value);
+    XenIfaceDebugPrint(INFO, "(\"%s\")=(%d)->\"%s\"\n", Buffer, Length, Value);
 
     RtlCopyMemory(Buffer, Value, Length);
     Buffer[Length - 1] = 0;
@@ -180,14 +180,14 @@ done:
     return status;
 
 fail4:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail4 (\"%s\")=(%d < %d)\n", __FUNCTION__, Buffer, OutLen, Length);
+    XenIfaceDebugPrint(ERROR, "Fail4 (\"%s\")=(%d < %d)\n", Buffer, OutLen, Length);
     XENBUS_STORE(Free, &Fdo->StoreInterface, Value);
 fail3:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail3 (\"%s\")\n", __FUNCTION__, Buffer);
+    XenIfaceDebugPrint(ERROR, "Fail3 (\"%s\")\n", Buffer);
 fail2:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail2\n", __FUNCTION__);
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
 fail1:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail1 (%08x)\n", __FUNCTION__, status);
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
 
@@ -221,17 +221,17 @@ IoctlStoreWrite(
     if (!NT_SUCCESS(status))
         goto fail4;
 
-    XenIfaceDebugPrint(INFO, "|%s: (\"%s\"=\"%s\")\n", __FUNCTION__, Buffer, Value);
+    XenIfaceDebugPrint(INFO, "(\"%s\"=\"%s\")\n", Buffer, Value);
     return status;
 
 fail4:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail4 (\"%s\")\n", __FUNCTION__, Value);
+    XenIfaceDebugPrint(ERROR, "Fail4 (\"%s\")\n", Value);
 fail3:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail3 (\"%s\")\n", __FUNCTION__, Buffer);
+    XenIfaceDebugPrint(ERROR, "Fail3 (\"%s\")\n", Buffer);
 fail2:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail2\n", __FUNCTION__);
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
 fail1:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail1 (%08x)\n", __FUNCTION__, status);
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
 
@@ -265,7 +265,7 @@ IoctlStoreDirectory(
 
     status = STATUS_BUFFER_OVERFLOW;
     if (OutLen == 0) {
-        XenIfaceDebugPrint(INFO, "|%s: (\"%s\")=(%d)(%d)\n", __FUNCTION__, Buffer, Length, Count);
+        XenIfaceDebugPrint(INFO, "(\"%s\")=(%d)(%d)\n", Buffer, Length, Count);
         goto done;
     }
 
@@ -273,7 +273,7 @@ IoctlStoreDirectory(
     if (OutLen < Length)
         goto fail4;
 
-    XenIfaceDebugPrint(INFO, "|%s: (\"%s\")=(%d)(%d)\n", __FUNCTION__, Buffer, Length, Count);
+    XenIfaceDebugPrint(INFO, "(\"%s\")=(%d)(%d)\n", Buffer, Length, Count);
 #if DBG
     __DisplayMultiSz(__FUNCTION__, Value);
 #endif
@@ -289,14 +289,14 @@ done:
     return status;
 
 fail4:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail4 (\"%s\")=(%d < %d)\n", __FUNCTION__, Buffer, OutLen, Length);
+    XenIfaceDebugPrint(ERROR, "Fail4 (\"%s\")=(%d < %d)\n", Buffer, OutLen, Length);
     XENBUS_STORE(Free, &Fdo->StoreInterface, Value);
 fail3:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail3 (\"%s\")\n", __FUNCTION__, Buffer);
+    XenIfaceDebugPrint(ERROR, "Fail3 (\"%s\")\n", Buffer);
 fail2:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail2\n", __FUNCTION__);
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
 fail1:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail1 (%08x)\n", __FUNCTION__, status);
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
 
@@ -322,15 +322,15 @@ IoctlStoreRemove(
     if (!NT_SUCCESS(status))
         goto fail3;
 
-    XenIfaceDebugPrint(INFO, "|%s: (\"%s\")\n", __FUNCTION__, Buffer);
+    XenIfaceDebugPrint(INFO, "(\"%s\")\n", Buffer);
     return status;
 
 fail3:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail3 (\"%s\")\n", __FUNCTION__, Buffer);
+    XenIfaceDebugPrint(ERROR, "Fail3 (\"%s\")\n", Buffer);
 fail2:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail2\n", __FUNCTION__);
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
 fail1:
-    XenIfaceDebugPrint(ERROR, "|%s: Fail1 (%08x)\n", __FUNCTION__, status);
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
 
