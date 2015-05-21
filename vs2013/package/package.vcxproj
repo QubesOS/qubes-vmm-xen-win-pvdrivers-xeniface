@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\configs.props" />
   <PropertyGroup Label="PropertySheets">
@@ -70,6 +70,66 @@
     <OutDir>..\$(ConfigurationName)\$(Platform)\</OutDir>
     <PackageDir>..\..\xeniface\$(DDKPlatform)</PackageDir>
   </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 7 Debug|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 8 Release|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows Vista Debug|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows Vista Release|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 7 Release|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 7 Debug|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 8 Debug|Win32'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 8 Release|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows Vista Debug|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows Vista Release|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 7 Release|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Windows 8 Debug|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ProjectReference Include="..\xeniface\xeniface.vcxproj">
       <Project>{22166290-65D8-49D2-BB88-33201797C7D8}</Project>
