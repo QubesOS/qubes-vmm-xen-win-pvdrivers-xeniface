@@ -1,37 +1,37 @@
 ; Copyright (c) Citrix Systems Inc.
 ; All rights reserved.
 ;
-; Redistribution and use in source and binary forms, 
-; with or without modification, are permitted provided 
+; Redistribution and use in source and binary forms,
+; with or without modification, are permitted provided
 ; that the following conditions are met:
 ;
-; *   Redistributions of source code must retain the above 
-;     copyright notice, this list of conditions and the 
+; *   Redistributions of source code must retain the above
+;     copyright notice, this list of conditions and the
 ;     following disclaimer.
-; *   Redistributions in binary form must reproduce the above 
-;     copyright notice, this list of conditions and the 
-;     following disclaimer in the documentation and/or other 
+; *   Redistributions in binary form must reproduce the above
+;     copyright notice, this list of conditions and the
+;     following disclaimer in the documentation and/or other
 ;     materials provided with the distribution.
 ;
-; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND 
-; CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
-; INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
-; MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
-; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
-; CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
-; SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
-; BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
-; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-; WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
-; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF 
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+; CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+; INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+; MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+; CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+; SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+; BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+; INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+; WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+; NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 ; SUCH DAMAGE.
 
 [Version]
 Signature="$WINDOWS NT$"
 Class=System
-ClassGUID={4d36e97d-e325-11ce-bfc1-08002be10318} 
+ClassGUID={4d36e97d-e325-11ce-bfc1-08002be10318}
 Provider=%Company%
 DriverVer=01/01/1900,0.0.0.0
 CatalogFile=xeniface.cat
@@ -49,7 +49,7 @@ ServiceDestDir.NT.Copy = 11
 ; -----------		    -------	      --------
 
 %XenIfaceDevice.DeviceDesc% =XenIface_Device, XENBUS\VEN_XSC000&DEV_IFACE&REV_00000001
-%XenIfaceDevice.DeviceDesc% =XenIface_Device, XENBUS\VEN_XS0001&DEV_IFACE&REV_00000001
+%XenIfaceDevice.DeviceDesc% =XenIface_Device, XENBUS\VEN_XS0001&DEV_IFACE&REV_00000028
 %XenIfaceDevice.DeviceDesc% =XenIface_Device, XENBUS\VEN_XS0002&DEV_IFACE&REV_00000001
 
 [XenIface_Device.NT$ARCH$]
@@ -71,7 +71,7 @@ AddService = xenlite, %LITESVC_FLAGS%, xenlite_Service_Inst
 [xeniface_Service_Inst]
 DisplayName    = %XenIfaceDevice.DeviceDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START 
+StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %12%\xeniface.sys
 LoadOrderGroup = Extended Base
@@ -90,7 +90,7 @@ HKR,,CoInstallers32,0x00010000,"xeniface_coinst_@MAJOR_VERSION@_@MINOR_VERSION@_
 [xenlite_Service_Inst]
 DisplayName    = %xenlite.SVCDESC%
 ServiceType    = 16              ; SERVICE_WIN32_OWN_PROCESS
-StartType      = 2               ; SERVICE_AUTO_START 
+StartType      = 2               ; SERVICE_AUTO_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %11%\liteagent.exe
 
@@ -104,9 +104,8 @@ xeniface_coinst.dll=1,,
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
-Company= "@COMPANY_NAME@" 
+Company= "@COMPANY_NAME@"
 DiskId1 = "@PRODUCT_NAME@ Interface Package"
 XenIfaceDevice.DeviceDesc = "@PRODUCT_NAME@ Interface"
 LITESVC_FLAGS= 0x00000800
 xenlite.SVCDESC= "@PRODUCT_NAME@ Interface Service"
-
