@@ -33,7 +33,7 @@ XENCONTROL_API
 void XenifaceSetLogLevel(
     IN  XENIFACE_LOG_LEVEL logLevel
     );
-    
+
 XENCONTROL_API
 DWORD XenifaceOpen(
     OUT HANDLE *iface
@@ -146,6 +146,14 @@ XENCONTROL_API
 DWORD StoreRemove(
     IN  HANDLE iface,
     IN  PCHAR path
+    );
+
+XENCONTROL_API
+DWORD StoreSetPermissions(
+    IN  HANDLE iface,
+    IN  PCHAR path,
+    IN  ULONG count,
+    IN  PXENBUS_STORE_PERMISSION permissions
     );
 
 #ifdef __cplusplus

@@ -86,11 +86,12 @@ static void ReadShm(SHARED_MEM *shm)
     wprintf(L"\n");
 }
 
-DWORD StoreTest(HANDLE xif)
+DWORD StoreTest(HANDLE xif, USHORT domain)
 {
     PCHAR path, value;
     CHAR xsBuffer[256];
     DWORD status;
+    XENBUS_STORE_PERMISSION perms[2];
 
     path = "name";
     status = StoreRead(xif, path, sizeof(xsBuffer), xsBuffer);
@@ -109,6 +110,10 @@ DWORD StoreTest(HANDLE xif)
         return status;
     }
     wprintf(L"[*] StoreRead(%S): '%S'\n", path, xsBuffer);
+    perms[0].Domain = (USHORT)atoi(xsBuffer); // our domain
+    perms[0].Mask = XS_PERM_NONE; // no permissions to others
+    perms[1].Domain = domain; // peer
+    perms[1].Mask = XS_PERM_READ;
 
     path = "xiftest";
     value = "this is a test";
@@ -142,6 +147,22 @@ DWORD StoreTest(HANDLE xif)
     }
     wprintf(L"[*] StoreRemove(%S) ok\n", path);
 
+    sprintf(xsBuffer, "data/xiftest/%d", domain);
+    path = xsBuffer;
+    value = "xif test";
+    status = StoreWrite(xif, path, value);
+    if (status != ERROR_SUCCESS)
+    {
+        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
+        return status;
+    }
+    status = StoreSetPermissions(xif, path, 2, perms);
+    if (status != ERROR_SUCCESS)
+    {
+        wprintf(L"[!] StoreSetPermissions(%S, %S) failed: 0x%x\n", path, value, status);
+        return status;
+    }
+
     return ERROR_SUCCESS;
 }
 
@@ -172,8 +193,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
-    status = StoreTest(xif);
-
     ctx.event = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (!ctx.event)
     {
@@ -193,6 +212,9 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ULONG refs[NUM_PAGES];
 
         remoteDomain = (USHORT)_wtoi(argv[2]);
+
+        status = StoreTest(xif, remoteDomain);
+
         status = EvtchnBindUnboundPort(xif, remoteDomain, ctx.event, FALSE, &localPort);
         if (status != ERROR_SUCCESS)
         {
@@ -258,6 +280,9 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ULONG refs[NUM_PAGES];
 
         remoteDomain = (USHORT)_wtoi(argv[1]);
+
+        status = StoreTest(xif, remoteDomain);
+
         refs[0] = _wtoi(argv[2]);
         wprintf(L"[*] performing initial one-page map: remote domain %d, ref %lu\n", remoteDomain, refs[0]);
 
@@ -302,7 +327,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             wprintf(L"[!] GnttabUnmapForeignPages failed: 0x%x\n", status);
             return 1;
         }
-        
+
         // map the full range with notifications
         status = GnttabMapForeignPages(xif,
                                        remoteDomain,

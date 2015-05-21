@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_DRIVER_H
 #define _XENIFACE_DRIVER_H
 
-
+#define XENIFACE_KERNEL_MODE
 
 #include "fdo.h"
 #include "types.h"

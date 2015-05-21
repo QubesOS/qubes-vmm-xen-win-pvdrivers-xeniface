@@ -177,7 +177,7 @@ DWORD EvtchnBindUnboundPort(
     }
 
     *localPort = out.LocalPort;
-    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
+    Log(XLL_DEBUG, L"LocalPort: %d", *localPort);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -225,7 +225,7 @@ DWORD EvtchnBindInterdomain(
     }
 
     *localPort = out.LocalPort;
-    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
+    Log(XLL_DEBUG, L"LocalPort: %d", *localPort);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -477,7 +477,7 @@ DWORD GnttabMapForeignPages(
     in->NotifyPort = notifyPort;
     in->Flags = flags;
     memcpy(&in->References, references, numberPages * sizeof(ULONG));
-    
+
     Log(XLL_DEBUG, L"RemoteDomain: %d, NumberPages: %d, NotifyOffset: 0x%x, NotifyPort: %d, Flags: 0x%x",
         remoteDomain, numberPages, notifyOffset, notifyPort, flags);
     success = DeviceIoControl(iface,
@@ -693,6 +693,65 @@ DWORD StoreRemove(
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
+    FUNCTION_EXIT();
+    return GetLastError();
+}
+
+DWORD StoreSetPermissions(
+    IN  HANDLE iface,
+    IN  PCHAR path,
+    IN  ULONG count,
+    IN  PXENBUS_STORE_PERMISSION permissions
+    )
+{
+    DWORD returned, size, i;
+    BOOL success;
+    STORE_SET_PERMISSIONS_IN *in = NULL;
+
+    FUNCTION_ENTER();
+
+    Log(XLL_DEBUG, L"Path: '%S', count: %lu", path, count);
+    for (i = 0; i < count; i++)
+        Log(XLL_DEBUG, L"domain %d, mask %d", permissions[i].Domain, permissions[i].Mask);
+
+    if (strlen(path) + 1 > sizeof(in->Path))
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        goto fail;
+    }
+
+    size = sizeof(STORE_SET_PERMISSIONS_IN) + count * sizeof(XENBUS_STORE_PERMISSION);
+    in = malloc(size);
+    if (!in)
+    {
+        SetLastError(ERROR_OUTOFMEMORY);
+        goto fail;
+    }
+
+    memcpy(in->Path, path, strlen(path) + 1);
+    in->NumberPermissions = count;
+    memcpy(&in->Permissions, permissions, count * sizeof(XENBUS_STORE_PERMISSION));
+
+    success = DeviceIoControl(iface,
+                              IOCTL_XENIFACE_STORE_SET_PERMISSIONS,
+                              in, size,
+                              NULL, 0,
+                              &returned,
+                              NULL);
+
+    if (!success)
+    {
+        Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_SET_PERMISSIONS failed");
+        goto fail;
+    }
+
+    free(in);
+    FUNCTION_EXIT();
+    return ERROR_SUCCESS;
+
+fail:
+    Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
+    free(in);
     FUNCTION_EXIT();
     return GetLastError();
 }

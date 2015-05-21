@@ -32,6 +32,7 @@
 #ifndef _IOCTLS_H_
 #define _IOCTLS_H_
 
+#define XENIFACE_KERNEL_MODE
 #include "xeniface_ioctls.h"
 
 typedef struct _XENIFACE_EVTCHN_CONTEXT {

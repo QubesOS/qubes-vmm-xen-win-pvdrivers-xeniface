@@ -285,6 +285,59 @@ fail1:
     return status;
 }
 
+static DECLSPEC_NOINLINE NTSTATUS
+IoctlStoreSetPermissions(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    PSTORE_SET_PERMISSIONS_IN In = (PSTORE_SET_PERMISSIONS_IN)Buffer;
+    ULONG Index;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) || OutLen != 0)
+        goto fail1;
+
+    if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
+        goto fail2;
+
+    In->Path[sizeof(In->Path) - 1] = 0;
+    XenIfaceDebugPrint(INFO, "> (Path: '%s', NumberPermissions: %lu)\n", In->Path, In->NumberPermissions);
+
+    status = STATUS_INVALID_PARAMETER;
+    for (Index = 0; Index < In->NumberPermissions; Index++) {
+        XenIfaceDebugPrint(INFO, "> (%lu: Domain %d, Mask 0x%x)\n", Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
+        if ((In->Permissions[Index].Mask & ~XENBUS_STORE_ALLOWED_PERMISSIONS) != 0)
+            goto fail3;
+    }
+
+    status = XENBUS_STORE(PermissionsSet,
+                          &Fdo->StoreInterface,
+                          NULL, // transaction
+                          NULL, // prefix
+                          In->Path,
+                          In->Permissions,
+                          In->NumberPermissions);
+
+    if (!NT_SUCCESS(status))
+        goto fail4;
+
+    return status;
+
+fail4:
+    XenIfaceDebugPrint(ERROR, "Fail4\n");
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
 _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
@@ -1363,6 +1416,10 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_STORE_REMOVE:
         status = IoctlStoreRemove(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+    case IOCTL_XENIFACE_STORE_SET_PERMISSIONS:
+        status = IoctlStoreSetPermissions(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
         // evtchn

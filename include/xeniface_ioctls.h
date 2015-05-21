@@ -38,14 +38,48 @@ DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
 /************************************************************************/
 /* store ioctls                                                         */
 /************************************************************************/
+// define only for user mode clients
+#ifndef XENIFACE_KERNEL_MODE
+
+typedef enum _XENBUS_STORE_PERMISSION_MASK {
+    XS_PERM_NONE = 0,
+    XS_PERM_READ = 1,
+    XS_PERM_WRITE = 2,
+} XENBUS_STORE_PERMISSION_MASK;
+
+typedef struct _XENBUS_STORE_PERMISSION {
+    USHORT Domain;
+    XENBUS_STORE_PERMISSION_MASK Mask;
+} XENBUS_STORE_PERMISSION, *PXENBUS_STORE_PERMISSION;
+
+#endif
+
+#define XENBUS_STORE_ALLOWED_PERMISSIONS  (XS_PERM_NONE | XS_PERM_READ | XS_PERM_WRITE)
+
 #define IOCTL_XENIFACE_STORE_READ \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define IOCTL_XENIFACE_STORE_WRITE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define IOCTL_XENIFACE_STORE_DIRECTORY \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
 #define IOCTL_XENIFACE_STORE_REMOVE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#define IOCTL_XENIFACE_STORE_SET_PERMISSIONS \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+#pragma warning(push)
+#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
+typedef struct _STORE_SET_PERMISSIONS_IN
+{
+    CHAR Path[256];
+    ULONG NumberPermissions;
+    XENBUS_STORE_PERMISSION Permissions[0];
+} STORE_SET_PERMISSIONS_IN, *PSTORE_SET_PERMISSIONS_IN;
+#pragma warning(pop)
 
 /************************************************************************/
 /* evtchn ioctls                                                        */
