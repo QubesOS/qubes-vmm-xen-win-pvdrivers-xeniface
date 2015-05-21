@@ -75,7 +75,8 @@ typedef struct _XENBUS_STORE_PERMISSION {
 #pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
 typedef struct _STORE_SET_PERMISSIONS_IN
 {
-    CHAR Path[256];
+    PCHAR Path;
+    ULONG PathLength; // number of bytes, including the null terminator
     ULONG NumberPermissions;
     XENBUS_STORE_PERMISSION Permissions[0];
 } STORE_SET_PERMISSIONS_IN, *PSTORE_SET_PERMISSIONS_IN;

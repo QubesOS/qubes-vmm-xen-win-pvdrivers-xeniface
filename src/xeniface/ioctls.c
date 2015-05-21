@@ -34,6 +34,55 @@
 #include "..\..\include\xeniface_ioctls.h"
 #include "log.h"
 
+#define XENSTORE_ABS_PATH_MAX 3072
+#define XENSTORE_REL_PATH_MAX 2048
+
+static NTSTATUS
+CaptureBuffer(
+    IN  PVOID Buffer,
+    IN  ULONG Length,
+    OUT PVOID *CapturedBuffer
+    )
+{
+    NTSTATUS Status;
+    PVOID TempBuffer = NULL;
+
+    if (Length == 0) {
+        *CapturedBuffer = NULL;
+        return STATUS_SUCCESS;
+    }
+
+    Status = STATUS_NO_MEMORY;
+    TempBuffer = ExAllocatePoolWithTag(NonPagedPool, Length, XENIFACE_POOL_TAG);
+    if (TempBuffer == NULL)
+        return STATUS_INSUFFICIENT_RESOURCES;
+
+    Status = STATUS_SUCCESS;
+    try {
+        ProbeForRead(Buffer, Length, 1);
+        RtlCopyMemory(TempBuffer, Buffer, Length);
+    } except(EXCEPTION_EXECUTE_HANDLER) {
+        XenIfaceDebugPrint(ERROR, "Exception while probing/reading buffer at %p, size 0x%lx\n", Buffer, Length);
+        ExFreePoolWithTag(TempBuffer, XENIFACE_POOL_TAG);
+        TempBuffer = NULL;
+        Status = GetExceptionCode();
+    }
+
+    *CapturedBuffer = TempBuffer;
+
+    return Status;
+ }
+
+static VOID
+FreeCapturedBuffer(
+    IN  PVOID CapturedBuffer
+    )
+{
+    if (CapturedBuffer != NULL) {
+        ExFreePoolWithTag(CapturedBuffer, XENIFACE_POOL_TAG);
+    }
+}
+
 static FORCEINLINE BOOLEAN
 __IsValidStr(
     __in  PCHAR             Str,
@@ -296,6 +345,7 @@ IoctlStoreSetPermissions(
     NTSTATUS status;
     PSTORE_SET_PERMISSIONS_IN In = (PSTORE_SET_PERMISSIONS_IN)Buffer;
     ULONG Index;
+    PCHAR Path;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) || OutLen != 0)
@@ -304,29 +354,42 @@ IoctlStoreSetPermissions(
     if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
         goto fail2;
 
-    In->Path[sizeof(In->Path) - 1] = 0;
-    XenIfaceDebugPrint(INFO, "> (Path: '%s', NumberPermissions: %lu)\n", In->Path, In->NumberPermissions);
-
     status = STATUS_INVALID_PARAMETER;
+    if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
+        goto fail3;
+
+    status = CaptureBuffer(In->Path, In->PathLength, &Path);
+    if (!NT_SUCCESS(status))
+        goto fail4;
+
+    Path[In->PathLength - 1] = 0;
+    XenIfaceDebugPrint(INFO, "> (Path: '%s', NumberPermissions: %lu)\n", Path, In->NumberPermissions);
+
     for (Index = 0; Index < In->NumberPermissions; Index++) {
         XenIfaceDebugPrint(INFO, "> (%lu: Domain %d, Mask 0x%x)\n", Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
         if ((In->Permissions[Index].Mask & ~XENBUS_STORE_ALLOWED_PERMISSIONS) != 0)
-            goto fail3;
+            goto fail5;
     }
 
     status = XENBUS_STORE(PermissionsSet,
                           &Fdo->StoreInterface,
                           NULL, // transaction
                           NULL, // prefix
-                          In->Path,
+                          Path,
                           In->Permissions,
                           In->NumberPermissions);
 
     if (!NT_SUCCESS(status))
-        goto fail4;
+        goto fail6;
 
+    FreeCapturedBuffer(Path);
     return status;
 
+fail6:
+    XenIfaceDebugPrint(ERROR, "Fail6\n");
+fail5:
+    XenIfaceDebugPrint(ERROR, "Fail5\n");
+    FreeCapturedBuffer(Path);
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
 fail3:

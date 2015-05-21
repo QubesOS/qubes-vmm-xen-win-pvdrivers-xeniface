@@ -728,7 +728,8 @@ DWORD StoreSetPermissions(
         goto fail;
     }
 
-    memcpy(in->Path, path, strlen(path) + 1);
+    in->Path = path;
+    in->PathLength = strlen(in->Path) + 1;
     in->NumberPermissions = count;
     memcpy(&in->Permissions, permissions, count * sizeof(XENBUS_STORE_PERMISSION));
 
