@@ -48,6 +48,24 @@ static void _Log(
     SetLastError(lastError);
 }
 
+static void
+LogMultiSz(
+    IN  PCHAR Caller,
+    IN  XENIFACE_LOG_LEVEL Level,
+    IN  PCHAR MultiSz
+    )
+{
+    PCHAR Ptr;
+    ULONG Len;
+
+    for (Ptr = MultiSz; *Ptr;)
+    {
+        Len = (ULONG)strlen(Ptr);
+        _Log(Level, Caller, L"%S", Ptr);
+        Ptr += (Len + 1);
+    }
+}
+
 void XenifaceRegisterLogger(
     IN  XenifaceLogger *logger
     )
@@ -379,6 +397,7 @@ DWORD GnttabGrantPages(
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, NumberPages: %d, NotifyOffset: 0x%x, NotifyPort: %d, Flags: 0x%x",
         remoteDomain, numberPages, notifyOffset, notifyPort, flags);
+
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_GNTTAB_GRANT_PAGES,
                               &in, sizeof(in),
@@ -395,7 +414,9 @@ DWORD GnttabGrantPages(
     *address = out->Address;
     *handle = out->Context;
     memcpy(references, &out->References, numberPages * sizeof(ULONG));
-    Log(XLL_DEBUG, L"Address: 0x%p, Context: 0x%p", *address, *handle);
+    Log(XLL_DEBUG, L"Address: 0x%p, Handle: 0x%p", *address, *handle);
+    for (ULONG i = 0; i < numberPages; i++)
+        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, out->References[i]);
 
     free(out);
     FUNCTION_EXIT();
@@ -421,7 +442,7 @@ DWORD GnttabUngrantPages(
 
     in.Context = handle;
 
-    Log(XLL_DEBUG, L"Context: 0x%p", handle);
+    Log(XLL_DEBUG, L"Handle: 0x%p", handle);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES,
                               &in, sizeof(in),
@@ -480,6 +501,10 @@ DWORD GnttabMapForeignPages(
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, NumberPages: %d, NotifyOffset: 0x%x, NotifyPort: %d, Flags: 0x%x",
         remoteDomain, numberPages, notifyOffset, notifyPort, flags);
+
+    for (ULONG i = 0; i < numberPages; i++)
+        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, references[i]);
+
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES,
                               in, size,
@@ -495,7 +520,7 @@ DWORD GnttabMapForeignPages(
 
     *address = out.Address;
     *handle = out.Context;
-    Log(XLL_DEBUG, L"Address: 0x%p, Context: 0x%p", *address, *handle);
+    Log(XLL_DEBUG, L"Address: 0x%p, Handle: 0x%p", *address, *handle);
 
     free(in);
     FUNCTION_EXIT();
@@ -521,7 +546,7 @@ DWORD GnttabUnmapForeignPages(
 
     in.Context = handle;
 
-    Log(XLL_DEBUG, L"Context: 0x%p", handle);
+    Log(XLL_DEBUG, L"Handle: 0x%p", handle);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES,
                               &in, sizeof(in),
@@ -556,7 +581,7 @@ DWORD StoreRead(
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S', Output: 0x%p, cbOutput: %lu 0x%lx", path, output, cbOutput, cbOutput);
+    Log(XLL_DEBUG, L"Path: '%S'", path);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_READ,
                               path, strlen(path) + 1,
@@ -569,6 +594,8 @@ DWORD StoreRead(
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_READ failed");
         goto fail;
     }
+
+    Log(XLL_DEBUG, L"Value: '%S'", output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -641,7 +668,7 @@ DWORD StoreDirectory(
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S', Output: 0x%p, cbOutput: %lu 0x%lx", path, output, cbOutput, cbOutput);
+    Log(XLL_DEBUG, L"Path: '%S'", path);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_DIRECTORY,
                               path, strlen(path) + 1,
@@ -654,6 +681,8 @@ DWORD StoreDirectory(
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_DIRECTORY failed");
         goto fail;
     }
+
+    LogMultiSz(__FUNCTION__, XLL_DEBUG, output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -712,7 +741,7 @@ DWORD StoreSetPermissions(
 
     Log(XLL_DEBUG, L"Path: '%S', count: %lu", path, count);
     for (i = 0; i < count; i++)
-        Log(XLL_DEBUG, L"domain %d, mask %d", permissions[i].Domain, permissions[i].Mask);
+        Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", permissions[i].Domain, permissions[i].Mask);
 
     size = sizeof(STORE_SET_PERMISSIONS_IN) + count * sizeof(XENBUS_STORE_PERMISSION);
     in = malloc(size);
@@ -765,7 +794,7 @@ DWORD StoreAddWatch(
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S', event: %p", path, event);
+    Log(XLL_DEBUG, L"Path: '%S', Event: 0x%x", path, event);
 
     in.Path = path;
     in.PathLength = strlen(path) + 1;
@@ -784,6 +813,9 @@ DWORD StoreAddWatch(
     }
 
     *handle = out.Context;
+
+    Log(XLL_DEBUG, L"Handle: %p", *handle);
+
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
@@ -804,7 +836,7 @@ DWORD StoreRemoveWatch(
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"handle: %p", handle);
+    Log(XLL_DEBUG, L"Handle: %p", handle);
 
     in.Context = handle;
     success = DeviceIoControl(iface,

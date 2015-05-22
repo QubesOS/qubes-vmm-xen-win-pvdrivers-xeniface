@@ -141,7 +141,7 @@ DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
     wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
     status = StoreWrite(xif, path, value);
     if (status != ERROR_SUCCESS) // this is expected
-        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
+        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x (this is expected)\n", path, value, status);
 
     path = "data/xiftest";
     wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
@@ -226,7 +226,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     CHAR storePath[256];
 
     XenifaceRegisterLogger(XifLogger);
-    XenifaceSetLogLevel(XLL_TRACE);
+    XenifaceSetLogLevel(XLL_DEBUG);
 
     status = XenifaceOpen(&xif);
     if (status != ERROR_SUCCESS)
