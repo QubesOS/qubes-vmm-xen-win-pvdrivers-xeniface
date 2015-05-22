@@ -156,6 +156,20 @@ DWORD StoreSetPermissions(
     IN  PXENBUS_STORE_PERMISSION permissions
     );
 
+XENCONTROL_API
+DWORD StoreAddWatch(
+    IN  HANDLE iface,
+    IN  PCHAR path,
+    IN  HANDLE event,
+    OUT PVOID *handle
+    );
+
+XENCONTROL_API
+DWORD StoreRemoveWatch(
+    IN  HANDLE iface,
+    IN  PVOID handle
+    );
+
 #ifdef __cplusplus
 }
 #endif

@@ -35,6 +35,13 @@
 #define XENIFACE_KERNEL_MODE
 #include "xeniface_ioctls.h"
 
+typedef struct _XENIFACE_STORE_CONTEXT {
+    LIST_ENTRY Entry;
+    PXENBUS_STORE_WATCH Watch;
+    PKEVENT Event;
+    PEPROCESS Process;
+} XENIFACE_STORE_CONTEXT, *PXENIFACE_STORE_CONTEXT;
+
 typedef struct _XENIFACE_EVTCHN_CONTEXT {
     LIST_ENTRY Entry;
     PXENBUS_EVTCHN_CHANNEL Channel;

@@ -401,6 +401,164 @@ fail1:
     return status;
 }
 
+static DECLSPEC_NOINLINE NTSTATUS
+IoctlStoreAddWatch(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    )
+{
+    NTSTATUS status;
+    PSTORE_ADD_WATCH_IN In = (PSTORE_ADD_WATCH_IN)Buffer;
+    PSTORE_ADD_WATCH_OUT Out = (PSTORE_ADD_WATCH_OUT)Buffer;
+    PCHAR Path;
+    PXENIFACE_STORE_CONTEXT Context;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(STORE_ADD_WATCH_IN) || OutLen != sizeof(STORE_ADD_WATCH_OUT))
+        goto fail1;
+
+    status = STATUS_INVALID_PARAMETER;
+    if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
+        goto fail2;
+
+    status = CaptureBuffer(In->Path, In->PathLength, &Path);
+    if (!NT_SUCCESS(status))
+        goto fail3;
+
+    Path[In->PathLength - 1] = 0;
+
+    status = STATUS_NO_MEMORY;
+    Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_STORE_CONTEXT), XENIFACE_POOL_TAG);
+    if (Context == NULL)
+        goto fail4;
+
+    RtlZeroMemory(Context, sizeof(XENIFACE_STORE_CONTEXT));
+
+    Context->Process = PsGetCurrentProcess();
+
+    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    if (!NT_SUCCESS(status))
+        goto fail5;
+
+    XenIfaceDebugPrint(INFO, "> (Path '%s', Event %p) Process %p\n", Path, In->Event, Context->Process);
+
+    status = XENBUS_STORE(WatchAdd,
+                          &Fdo->StoreInterface,
+                          NULL, // prefix
+                          Path,
+                          Context->Event,
+                          &Context->Watch);
+
+    if (!NT_SUCCESS(status))
+        goto fail6;
+
+    FreeCapturedBuffer(Path);
+
+    KeAcquireSpinLock(&Fdo->StoreWatchLock, &Irql);
+    InsertTailList(&Fdo->StoreWatchList, &Context->Entry);
+    KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
+
+    XenIfaceDebugPrint(INFO, "< Context %p, Watch %p\n", Context, Context->Watch);
+
+    Out->Context = Context;
+    *Info = sizeof(STORE_ADD_WATCH_OUT);
+
+    return status;
+
+fail6:
+    XenIfaceDebugPrint(ERROR, "Fail6\n");
+fail5:
+    XenIfaceDebugPrint(ERROR, "Fail5\n");
+    RtlZeroMemory(Context, sizeof(XENIFACE_STORE_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+fail4:
+    XenIfaceDebugPrint(ERROR, "Fail4\n");
+    FreeCapturedBuffer(Path);
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
+static
+VOID
+StoreWatchFree(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_STORE_CONTEXT Context
+    )
+{
+    NTSTATUS status;
+
+    XenIfaceDebugPrint(TRACE, "Record %p, Watch %p, Process %p\n", Context, Context->Watch, Context->Process);
+    status = XENBUS_STORE(WatchRemove,
+                          &Fdo->StoreInterface,
+                          Context->Watch);
+
+    ASSERT(NT_SUCCESS(status)); // this is fatal since we'd leave an active watch without cleaning it up
+
+    ObDereferenceObject(Context->Event);
+    RtlZeroMemory(Context, sizeof(XENIFACE_STORE_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
+IoctlStoreRemoveWatch(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    )
+{
+    NTSTATUS status;
+    PSTORE_REMOVE_WATCH_IN In = (PSTORE_REMOVE_WATCH_IN)Buffer;
+    PXENIFACE_STORE_CONTEXT Context = NULL;
+    KIRQL Irql;
+    PLIST_ENTRY Node;
+    PEPROCESS CurrentProcess;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(STORE_REMOVE_WATCH_IN) || OutLen != 0)
+        goto fail1;
+
+    CurrentProcess = PsGetCurrentProcess();
+    XenIfaceDebugPrint(INFO, "> (Context %p) Process %p\n", In->Context, CurrentProcess);
+
+    KeAcquireSpinLock(&Fdo->StoreWatchLock, &Irql);
+    Node = Fdo->StoreWatchList.Flink;
+    while (Node->Flink != Fdo->StoreWatchList.Flink) {
+        Context = CONTAINING_RECORD(Node, XENIFACE_STORE_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (Context != In->Context || Context->Process != CurrentProcess)
+            continue;
+
+        RemoveEntryList(&Context->Entry);
+        break;
+    }
+    KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
+
+    status = STATUS_NOT_FOUND;
+    if (Context == NULL)
+        goto fail2;
+
+    StoreWatchFree(Fdo, Context);
+
+    return STATUS_SUCCESS;
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
 _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
@@ -486,7 +644,7 @@ EvtchnFindChannel(
 }
 
 // Process creation/destruction notify routine.
-// Used for cleaning up of allocated event channels and grants/maps.
+// Used for cleaning up of allocated event channels and grants/maps/store watches.
 // Runs at PASSIVE_LEVEL and if Create==FALSE, in the context of the process being destroyed.
 VOID
 XenifaceProcessNotify(
@@ -500,6 +658,7 @@ XenifaceProcessNotify(
     PXENIFACE_EVTCHN_CONTEXT EvtchnRecord;
     PXENIFACE_GRANT_CONTEXT GnttabRecord;
     PXENIFACE_MAP_CONTEXT MapRecord;
+    PXENIFACE_STORE_CONTEXT StoreRecord;
     KIRQL Irql;
     LIST_ENTRY ToFree;
 
@@ -511,6 +670,22 @@ XenifaceProcessNotify(
         return;
 
     CurrentProcess = PsGetCurrentProcess();
+
+    // store watches
+    KeAcquireSpinLock(&FdoGlobal->StoreWatchLock, &Irql);
+    Node = FdoGlobal->StoreWatchList.Flink;
+    while (Node->Flink != FdoGlobal->StoreWatchList.Flink) {
+        StoreRecord = CONTAINING_RECORD(Node, XENIFACE_STORE_CONTEXT, Entry);
+
+        Node = Node->Flink;
+        if (StoreRecord->Process != CurrentProcess)
+            continue;
+
+        XenIfaceDebugPrint(TRACE, "Process %p, StoreRecord %p\n", CurrentProcess, StoreRecord);
+        RemoveEntryList(&StoreRecord->Entry);
+        StoreWatchFree(FdoGlobal, StoreRecord);
+    }
+    KeReleaseSpinLock(&FdoGlobal->StoreWatchLock, Irql);
 
     // grants
     InitializeListHead(&ToFree);
@@ -1245,6 +1420,9 @@ IoctlGnttabMapForeignPages(
     XenIfaceDebugPrint(INFO, "> (RemoteDomain %d, NumberPages %lu, Flags 0x%x, Offset 0x%x, Port %d) Process %p\n",
                        Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort, Context->Process);
 
+    for (ULONG i = 0; i < In->NumberPages; i++)
+        XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[i]);
+
     status = STATUS_NO_MEMORY;
     Context->Handles = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * sizeof(ULONG), XENIFACE_POOL_TAG);
     if (Context->Handles == NULL)
@@ -1483,6 +1661,14 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_STORE_SET_PERMISSIONS:
         status = IoctlStoreSetPermissions(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+    case IOCTL_XENIFACE_STORE_ADD_WATCH:
+        status = IoctlStoreAddWatch(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        break;
+
+    case IOCTL_XENIFACE_STORE_REMOVE_WATCH:
+        status = IoctlStoreRemoveWatch(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
         // evtchn

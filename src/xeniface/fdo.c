@@ -2337,6 +2337,9 @@ FdoCreate(
     if (!NT_SUCCESS(status))
         goto fail13;
 
+    KeInitializeSpinLock(&Fdo->StoreWatchLock);
+    InitializeListHead(&Fdo->StoreWatchList);
+
     KeInitializeSpinLock(&Fdo->EvtchnLock);
     InitializeListHead(&Fdo->EvtchnList);
     ASSERT(FdoGlobal == NULL);
@@ -2478,7 +2481,11 @@ FdoDestroy(
     RtlZeroMemory(&Fdo->EvtchnList, sizeof(LIST_ENTRY));
     RtlZeroMemory(&Fdo->EvtchnLock, sizeof(KSPIN_LOCK));
 
-    RtlZeroMemory(&Fdo->Mutex, sizeof (XENIFACE_MUTEX));
+    ASSERT(IsListEmpty(&Fdo->StoreWatchList));
+    RtlZeroMemory(&Fdo->StoreWatchList, sizeof(LIST_ENTRY));
+    RtlZeroMemory(&Fdo->StoreWatchLock, sizeof(KSPIN_LOCK));
+
+    RtlZeroMemory(&Fdo->Mutex, sizeof(XENIFACE_MUTEX));
 
     Fdo->InterfacesAcquired = FALSE;
 

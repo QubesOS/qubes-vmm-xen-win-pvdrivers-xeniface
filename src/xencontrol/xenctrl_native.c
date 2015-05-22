@@ -714,12 +714,6 @@ DWORD StoreSetPermissions(
     for (i = 0; i < count; i++)
         Log(XLL_DEBUG, L"domain %d, mask %d", permissions[i].Domain, permissions[i].Mask);
 
-    if (strlen(path) + 1 > sizeof(in->Path))
-    {
-        SetLastError(ERROR_INVALID_PARAMETER);
-        goto fail;
-    }
-
     size = sizeof(STORE_SET_PERMISSIONS_IN) + count * sizeof(XENBUS_STORE_PERMISSION);
     in = malloc(size);
     if (!in)
@@ -753,6 +747,84 @@ DWORD StoreSetPermissions(
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
     free(in);
+    FUNCTION_EXIT();
+    return GetLastError();
+}
+
+DWORD StoreAddWatch(
+    IN  HANDLE iface,
+    IN  PCHAR path,
+    IN  HANDLE event,
+    OUT PVOID *handle
+    )
+{
+    DWORD returned;
+    BOOL success;
+    STORE_ADD_WATCH_IN in;
+    STORE_ADD_WATCH_OUT out;
+
+    FUNCTION_ENTER();
+
+    Log(XLL_DEBUG, L"Path: '%S', event: %p", path, event);
+
+    in.Path = path;
+    in.PathLength = strlen(path) + 1;
+    in.Event = event;
+    success = DeviceIoControl(iface,
+                              IOCTL_XENIFACE_STORE_ADD_WATCH,
+                              &in, sizeof(in),
+                              &out, sizeof(out),
+                              &returned,
+                              NULL);
+
+    if (!success)
+    {
+        Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_ADD_WATCH failed");
+        goto fail;
+    }
+
+    *handle = out.Context;
+    FUNCTION_EXIT();
+    return ERROR_SUCCESS;
+
+fail:
+    Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
+    FUNCTION_EXIT();
+    return GetLastError();
+}
+
+DWORD StoreRemoveWatch(
+    IN  HANDLE iface,
+    IN  PVOID handle
+    )
+{
+    DWORD returned;
+    BOOL success;
+    STORE_REMOVE_WATCH_IN in;
+
+    FUNCTION_ENTER();
+
+    Log(XLL_DEBUG, L"handle: %p", handle);
+
+    in.Context = handle;
+    success = DeviceIoControl(iface,
+                              IOCTL_XENIFACE_STORE_REMOVE_WATCH,
+                              &in, sizeof(in),
+                              NULL, 0,
+                              &returned,
+                              NULL);
+
+    if (!success)
+    {
+        Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_REMOVE_WATCH failed");
+        goto fail;
+    }
+
+    FUNCTION_EXIT();
+    return ERROR_SUCCESS;
+
+fail:
+    Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
     FUNCTION_EXIT();
     return GetLastError();
 }

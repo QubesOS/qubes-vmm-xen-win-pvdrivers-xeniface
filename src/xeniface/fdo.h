@@ -84,6 +84,9 @@ typedef struct _XENIFACE_FDO {
 
     BOOLEAN                         InterfacesAcquired;
 
+    KSPIN_LOCK                      StoreWatchLock;
+    LIST_ENTRY                      StoreWatchList;
+
     KSPIN_LOCK                      EvtchnLock;
     LIST_ENTRY                      EvtchnList;
 

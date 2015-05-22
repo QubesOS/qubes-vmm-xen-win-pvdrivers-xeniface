@@ -82,6 +82,29 @@ typedef struct _STORE_SET_PERMISSIONS_IN
 } STORE_SET_PERMISSIONS_IN, *PSTORE_SET_PERMISSIONS_IN;
 #pragma warning(pop)
 
+#define IOCTL_XENIFACE_STORE_ADD_WATCH \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _STORE_ADD_WATCH_IN
+{
+    PCHAR Path;
+    ULONG PathLength; // number of bytes, including the null terminator
+    HANDLE Event;
+} STORE_ADD_WATCH_IN, *PSTORE_ADD_WATCH_IN;
+
+typedef struct _STORE_ADD_WATCH_OUT
+{
+    PVOID Context;
+} STORE_ADD_WATCH_OUT, *PSTORE_ADD_WATCH_OUT;
+
+#define IOCTL_XENIFACE_STORE_REMOVE_WATCH \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x806, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _STORE_REMOVE_WATCH_IN
+{
+    PVOID Context;
+} STORE_REMOVE_WATCH_IN, *PSTORE_REMOVE_WATCH_IN;
+
 /************************************************************************/
 /* evtchn ioctls                                                        */
 /************************************************************************/
