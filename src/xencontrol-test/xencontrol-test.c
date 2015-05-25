@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "xenctrl_native.h"
+#include "xencontrol.h"
 #include <strsafe.h>
 
 #define PAGE_SIZE 0x1000

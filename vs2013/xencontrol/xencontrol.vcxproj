@@ -227,11 +227,11 @@ xcopy /y $(TargetDir)$(TargetName).lib $(SolutionDir)\..\$(TargetName)\$(Platfor
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\include\xenctrl_native.h" />
+    <ClCompile Include="..\..\src\xencontrol\main.c" />
+    <ClCompile Include="..\..\src\xencontrol\xencontrol.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\xencontrol\main.c" />
-    <ClCompile Include="..\..\src\xencontrol\xenctrl_native.c" />
+    <ClInclude Include="..\..\include\xencontrol.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

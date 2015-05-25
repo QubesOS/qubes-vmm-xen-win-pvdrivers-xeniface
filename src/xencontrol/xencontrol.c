@@ -1,5 +1,5 @@
 #define INITGUID
-#include "xenctrl_native.h"
+#include "xencontrol.h"
 
 #include <stdlib.h>
 #include <winioctl.h>
