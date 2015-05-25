@@ -58,6 +58,8 @@ CaptureBuffer(
         return STATUS_INSUFFICIENT_RESOURCES;
 
     Status = STATUS_SUCCESS;
+
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
     try {
         ProbeForRead(Buffer, Length, 1);
         RtlCopyMemory(TempBuffer, Buffer, Length);
@@ -1314,6 +1316,7 @@ IoctlGnttabGrantPages(
     }
 
     // map into user mode
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
     __try {
         Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
     }
@@ -1510,6 +1513,7 @@ IoctlGnttabMapForeignPages(
     MmBuildMdlForNonPagedPool(Context->Mdl);
 
     // map into user mode
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
     __try {
         Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
     }

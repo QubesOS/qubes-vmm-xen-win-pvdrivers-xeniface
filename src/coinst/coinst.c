@@ -130,6 +130,7 @@ GetErrorMessage(
                   0,
                   NULL);
 
+#pragma warning(suppress: 6102)
     for (Index = 0; Message[Index] != '\0'; Index++) {
         if (Message[Index] == '\r' || Message[Index] == '\n') {
             Message[Index] = '\0';
