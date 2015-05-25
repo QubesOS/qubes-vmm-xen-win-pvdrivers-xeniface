@@ -163,6 +163,19 @@ typedef struct _EVTCHN_UNMASK_IN
     ULONG LocalPort;
 } EVTCHN_UNMASK_IN, *PEVTCHN_UNMASK_IN;
 
+#define IOCTL_XENIFACE_EVTCHN_STATUS \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x816, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _EVTCHN_STATUS_IN
+{
+    ULONG LocalPort;
+} EVTCHN_STATUS_IN, *PEVTCHN_STATUS_IN;
+
+typedef struct _EVTCHN_STATUS_OUT
+{
+    ULONG Status;
+} EVTCHN_STATUS_OUT, *PEVTCHN_STATUS_OUT;
+
 /************************************************************************/
 /* gntmem ioctls                                                        */
 /************************************************************************/

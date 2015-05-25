@@ -1079,6 +1079,61 @@ fail1:
     return status;
 }
 
+static DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnStatus(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    )
+{
+    NTSTATUS status;
+    PEVTCHN_STATUS_IN In = (PEVTCHN_STATUS_IN)Buffer;
+    PEVTCHN_STATUS_OUT Out = (PEVTCHN_STATUS_OUT)Buffer;
+    PXENIFACE_EVTCHN_CONTEXT Record = NULL;
+    KIRQL Irql;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (InLen != sizeof(EVTCHN_STATUS_IN) || OutLen != sizeof(EVTCHN_STATUS_OUT))
+        goto fail1;
+
+    XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
+
+    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
+
+    Record = EvtchnFindChannel(Fdo, In->LocalPort);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (Record == NULL)
+        goto fail2;
+
+    status = XENBUS_EVTCHN(Status,
+                           &Fdo->EvtchnInterface,
+                           Record->Channel,
+                           &Out->Status);
+
+    if (!NT_SUCCESS(status))
+        goto fail3;
+
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+    *Info = sizeof(EVTCHN_STATUS_OUT);
+
+    return status;
+
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+
+fail2:
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    return status;
+}
+
 __drv_requiresIRQL(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
@@ -1690,6 +1745,10 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_EVTCHN_UNMASK:
         status = IoctlEvtchnUnmask(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        break;
+
+    case IOCTL_XENIFACE_EVTCHN_STATUS:
+        status = IoctlEvtchnStatus(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
         // gnttab
