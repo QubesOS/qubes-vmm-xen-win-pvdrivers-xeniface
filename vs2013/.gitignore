@@ -1,0 +1,8 @@
+Debug
+Release
+Windows7Debug
+Windows7Release
+MSG*.bin
+messages.h
+messages.rc
+xeniface.inf
