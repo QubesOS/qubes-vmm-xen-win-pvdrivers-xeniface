@@ -2,7 +2,6 @@
 #include "xencontrol.h"
 
 #include <stdlib.h>
-#include <winioctl.h>
 #include <setupapi.h>
 
 static XenifaceLogger *g_Logger = NULL;
@@ -625,7 +624,7 @@ DWORD StoreRead(
     Log(XLL_DEBUG, L"Path: '%S'", path);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_READ,
-                              path, strlen(path) + 1,
+                              path, (DWORD)strlen(path) + 1,
                               output, cbOutput,
                               &returned,
                               NULL);
@@ -660,7 +659,7 @@ DWORD StoreWrite(
 
     FUNCTION_ENTER();
 
-    cbBuffer = strlen(path) + 1 + strlen(value) + 1 + 1;
+    cbBuffer = (DWORD)(strlen(path) + 1 + strlen(value) + 1 + 1);
     buffer = malloc(cbBuffer);
     if (!buffer)
     {
@@ -712,7 +711,7 @@ DWORD StoreDirectory(
     Log(XLL_DEBUG, L"Path: '%S'", path);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_DIRECTORY,
-                              path, strlen(path) + 1,
+                              path, (DWORD)strlen(path) + 1,
                               output, cbOutput,
                               &returned,
                               NULL);
@@ -747,7 +746,7 @@ DWORD StoreRemove(
     Log(XLL_DEBUG, L"Path: '%S'", path);
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_REMOVE,
-                              path, strlen(path) + 1,
+                              path, (DWORD)strlen(path) + 1,
                               NULL, 0,
                               &returned,
                               NULL);
@@ -793,7 +792,7 @@ DWORD StoreSetPermissions(
     }
 
     in->Path = path;
-    in->PathLength = strlen(in->Path) + 1;
+    in->PathLength = (DWORD)strlen(in->Path) + 1;
     in->NumberPermissions = count;
     memcpy(&in->Permissions, permissions, count * sizeof(XENBUS_STORE_PERMISSION));
 
@@ -838,7 +837,7 @@ DWORD StoreAddWatch(
     Log(XLL_DEBUG, L"Path: '%S', Event: 0x%x", path, event);
 
     in.Path = path;
-    in.PathLength = strlen(path) + 1;
+    in.PathLength = (DWORD)strlen(path) + 1;
     in.Event = event;
     success = DeviceIoControl(iface,
                               IOCTL_XENIFACE_STORE_ADD_WATCH,
