@@ -1075,8 +1075,9 @@ IoctlEvtchnNotify(
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(EVTCHN_NOTIFY_IN) || OutLen != 0)
         goto fail1;
-
+#if DBG
     XenIfaceDebugPrint(INFO, "> (LocalPort %d)\n", In->LocalPort);
+#endif
 
     return EvtchnNotify(Fdo, PsGetCurrentProcess(), In->LocalPort);
 
