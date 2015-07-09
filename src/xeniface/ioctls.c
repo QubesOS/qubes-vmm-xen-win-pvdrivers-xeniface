@@ -663,6 +663,11 @@ EvtchnFree(
 {
     XenIfaceDebugPrint(TRACE, "Record %p, LocalPort %d, Process %p\n", Context, Context->LocalPort, Context->Process);
     XENBUS_EVTCHN(Close, &Fdo->EvtchnInterface, Context->Channel);
+
+    // Cancel the DPC if queued, otherwise the OS may access invalid memory after we free the context.
+    if (KeRemoveQueueDpc(&Context->Dpc))
+        XenIfaceDebugPrint(TRACE, "Removing pending DPC %p, cpu %lu\n", &Context->Dpc, KeGetCurrentProcessorNumber());
+
     ObDereferenceObject(Context->Event);
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
