@@ -18,25 +18,21 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D386D8E9-D015-4AD2-A5C2-4F845A803FA2}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>xencontrol</RootNamespace>
   </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\xencontrol.props" />
   </ImportGroup>
-
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>_WINDOWS;_USRDLL;XENCONTROL_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -45,13 +41,15 @@
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
-
   <ItemGroup>
     <ClCompile Include="..\..\src\xencontrol\main.c" />
     <ClCompile Include="..\..\src\xencontrol\xencontrol.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\xencontrol.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\..\src\xencontrol\xencontrol.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
