@@ -627,7 +627,9 @@ EvtchnDpc(
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(Argument1);
     UNREFERENCED_PARAMETER(Argument2);
-    ASSERT(Context != NULL);
+
+    if (!Ctx)
+        return;
 
     XenIfaceDebugPrint(TRACE, "Signaled Channel %p, LocalPort %d, IRQL %d\n", Ctx->Channel, Ctx->LocalPort, KeGetCurrentIrql());
     KeSetEvent(Ctx->Event, 0, FALSE);
