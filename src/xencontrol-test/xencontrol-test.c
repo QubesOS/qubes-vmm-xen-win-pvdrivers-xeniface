@@ -1,149 +1,147 @@
-#define _CRT_SECURE_NO_WARNINGS
-
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "xencontrol.h"
 #include <strsafe.h>
 
-#define PAGE_SIZE 0x1000
-#define NUM_PAGES              4
+#include "xencontrol.h"
+#include "crc64.h"
 
-// those are at the end of the area to test if it works ok
-#define SERVER_NOTIFY_OFFSET   (NUM_PAGES*PAGE_SIZE  - 1)
-#define CLIENT_NOTIFY_OFFSET   (SERVER_NOTIFY_OFFSET - 1)
+#define PAGES_MIN 1
+#define PAGES_MAX 64
+
+#define PAGE_SIZE 0x1000
 
 #define PB(va, offset)         (((BYTE *)(va)) + (offset))
-#define SERVER_FLAG(va)        (*PB(va, SERVER_NOTIFY_OFFSET))
-#define CLIENT_FLAG(va)        (*PB(va, CLIENT_NOTIFY_OFFSET))
 
-// at the start of the area so client can map/read it using just one ref
+// should fit in one page
 typedef struct _SHARED_MEM
 {
     ULONG EventPort;
-    ULONG References[NUM_PAGES];
-    CHAR Message[64];
+    ULONG NumberPages;
+    ULONG ServerPid;
+    BYTE ServerFlag;
+    BYTE ClientFlag;
+    ULONG64 Crc;
+    ULONG References[0]; // count: NumberPages
 } SHARED_MEM;
+
+#define DATA_SIZE(pages) (PAGE_SIZE*(pages) - sizeof(SHARED_MEM) - sizeof(ULONG)*(pages))
+#define DATA_PTR(shm)    PB(shm, sizeof(SHARED_MEM) + (shm)->NumberPages*sizeof(ULONG))
 
 typedef struct _EVT_CTX
 {
-    HANDLE event;
-    HANDLE storeEvent;
-    BOOL is_server;
-    PVOID va;
-    BOOL exit;
-    HANDLE xif;
-    USHORT remoteDomain;
-    USHORT localDomain;
+    HANDLE MsgEvent;
+    HANDLE StoreEvent;
+    BOOL IsServer;
+    SHARED_MEM *Shm;
+    BOOL Exit;
+    HANDLE Xif;
+    USHORT RemoteDomain;
+    USHORT LocalDomain;
 } EVT_CTX;
 
-DWORD StoreRemoteRead(HANDLE xif, USHORT remoteDomain, USHORT localDomain);
+DWORD StoreRemoteRead(HANDLE xif, ULONG serverPid, USHORT remoteDomain, USHORT localDomain);
+void ReadShm(SHARED_MEM *shm);
 
 DWORD WINAPI EventThreadProc(PVOID context)
 {
     EVT_CTX *ctx = (EVT_CTX *)context;
-    HANDLE events[2] = { ctx->event, ctx->storeEvent };
+    HANDLE events[2] = { ctx->MsgEvent, ctx->StoreEvent };
     DWORD id;
 
     while (TRUE)
     {
         id = WaitForMultipleObjects(2, events, FALSE, INFINITE) - WAIT_OBJECT_0;
 
-        if (id == 0) // evtchn event
+        if (id == 0) // message event
         {
-            wprintf(L"[~] evtchn signaled\n");
+            wprintf(L"[~] msg event signaled\n");
 
             // check if the other peer exited
-            if (ctx->is_server)
+            if (ctx->IsServer)
             {
-                if (CLIENT_FLAG(ctx->va) == 0) // client exited
+                if (ctx->Shm->ClientFlag == 0)
                 {
                     wprintf(L"[~] client exited\n");
-                    ctx->exit = TRUE;
+                    ctx->Exit = TRUE;
                     return 0;
                 }
-                if (CLIENT_FLAG(ctx->va) == 1) // client is running
+                if (ctx->Shm->ClientFlag == 1) // client is running
                 {
                     wprintf(L"[~] client has connected\n");
                 }
             }
             else // client
             {
-                if (SERVER_FLAG(ctx->va) == 0) // server exited
+                if (ctx->Shm->ServerFlag == 0)
                 {
                     wprintf(L"[~] server exited\n");
-                    ctx->exit = TRUE;
+                    ctx->Exit = TRUE;
                     return 0;
                 }
             }
+
+            ReadShm(ctx->Shm);
         }
         else if (id == 1) // store watch event
         {
             wprintf(L"[~] store watch signaled\n");
-            StoreRemoteRead(ctx->xif, ctx->remoteDomain, ctx->localDomain);
+            StoreRemoteRead(ctx->Xif, ctx->Shm->ServerPid, ctx->RemoteDomain, ctx->LocalDomain);
         }
         else
         {
-            wprintf(L"[~] WAIT ERROR\n");
+            wprintf(L"[!] WAIT ERROR\n");
         }
     }
 }
 
 static void ReadShm(SHARED_MEM *shm)
 {
-    ULONG i;
+    ULONG64 crc;
 
-    wprintf(L"[=] S:%d C:%d ", SERVER_FLAG(shm), CLIENT_FLAG(shm));
-
-    for (i = 0; i < 16; i++)
-        wprintf(L"%02x", shm->Message[i]);
-
-    wprintf(L" ");
-
-    for (i = 0; shm->Message[i] && (i < 16); i++)
-        wprintf(L"%C", shm->Message[i]);
-
-    wprintf(L"\n");
+    crc64(&crc, DATA_PTR(shm), DATA_SIZE(shm->NumberPages));
+    wprintf(L"[=] S:%d C:%d %016I64x %s", shm->ServerFlag, shm->ClientFlag, crc, crc == shm->Crc ? L"ok\n" : L"BAD CRC\n");
 }
 
-DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
+DWORD StoreTest(IN HANDLE xif, IN ULONG serverPid, IN USHORT remoteDomain, OUT USHORT *localDomain)
 {
-    PCHAR path, value;
-    CHAR xsBuffer[256];
+    CHAR path[256], value[256];
     DWORD status;
     XENBUS_STORE_PERMISSION perms[2];
+    DWORD pid = GetCurrentProcessId();
 
-    path = "name";
-    status = StoreRead(xif, path, sizeof(xsBuffer), xsBuffer);
+    StringCbPrintfA(path, sizeof(path), "name");
+    status = StoreRead(xif, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
         wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, xsBuffer);
+    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
 
-    path = "domid";
-    status = StoreRead(xif, path, sizeof(xsBuffer), xsBuffer);
+    StringCbPrintfA(path, sizeof(path), "domid");
+    status = StoreRead(xif, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
         wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, xsBuffer);
-    *localDomain = (USHORT)atoi(xsBuffer);
+    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
+    *localDomain = (USHORT)atoi(value);
+
     perms[0].Domain = *localDomain; // our domain
     perms[0].Mask = XS_PERM_NONE; // no permissions to others
     perms[1].Domain = remoteDomain; // peer
     perms[1].Mask = XS_PERM_READ;
 
-    path = "xiftest";
-    value = "this is a test";
+    StringCbPrintfA(path, sizeof(path), "xiftest-%d", pid);
+    StringCbPrintfA(value, sizeof(value), "this is a test");
     wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
     status = StoreWrite(xif, path, value);
     if (status != ERROR_SUCCESS) // this is expected
-        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x (this is expected)\n", path, value, status);
+        wprintf(L"[*] StoreWrite(%S, %S) failed: 0x%x (this is expected)\n", path, value, status);
 
-    path = "data/xiftest";
+    StringCbPrintfA(path, sizeof(path), "data/xiftest-%d", pid);
     wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
     status = StoreWrite(xif, path, value);
     if (status != ERROR_SUCCESS)
@@ -152,13 +150,13 @@ DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
         return status;
     }
 
-    status = StoreRead(xif, path, sizeof(xsBuffer), xsBuffer);
+    status = StoreRead(xif, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
         wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, xsBuffer);
+    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
 
     status = StoreRemove(xif, path);
     if (status != ERROR_SUCCESS)
@@ -169,9 +167,8 @@ DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
     wprintf(L"[*] StoreRemove(%S) ok\n", path);
 
     // create a key readable by the peer domain
-    sprintf(xsBuffer, "data/xiftest/%d", remoteDomain);
-    path = xsBuffer;
-    value = "xif test";
+    StringCbPrintfA(path, sizeof(path), "data/xiftest-%d/%d", serverPid, remoteDomain);
+    StringCbPrintfA(value, sizeof(value), "xif test %d", pid);
     status = StoreWrite(xif, path, value);
     if (status != ERROR_SUCCESS)
     {
@@ -181,7 +178,7 @@ DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
     status = StoreSetPermissions(xif, path, 2, perms);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreSetPermissions(%S, %S) failed: 0x%x\n", path, value, status);
+        wprintf(L"[!] StoreSetPermissions(%S) failed: 0x%x\n", path, status);
         return status;
     }
 
@@ -189,12 +186,12 @@ DWORD StoreTest(IN HANDLE xif, IN USHORT remoteDomain, OUT USHORT *localDomain)
 }
 
 // read shared key
-DWORD StoreRemoteRead(HANDLE xif, USHORT remoteDomain, USHORT localDomain)
+DWORD StoreRemoteRead(HANDLE xif, ULONG serverPid, USHORT remoteDomain, USHORT localDomain)
 {
     CHAR path[256], value[256];
     DWORD status;
 
-    sprintf(path, "/local/domain/%d/data/xiftest/%d", remoteDomain, localDomain);
+    StringCbPrintfA(path, sizeof(path), "/local/domain/%d/data/xiftest-%d/%d", remoteDomain, serverPid, localDomain);
     status = StoreRead(xif, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
@@ -213,6 +210,13 @@ void XifLogger(XENIFACE_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list 
     wprintf(L"[X] %S: %s\n", function, buf);
 }
 
+void Usage(WCHAR *exe)
+{
+    wprintf(L"Usage:\n", exe);
+    wprintf(L"server: %s server <remote domain id> [number of loops]\n", exe);
+    wprintf(L"client: %s <remote domain id> <shared page ref> [number of loops]\n", exe);
+}
+
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
     HANDLE xif;
@@ -220,10 +224,20 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     EVT_CTX ctx;
     SHARED_MEM *shm;
     ULONG localPort;
-    USHORT remoteDomain, localDomain;
     PVOID mapHandle;
     PVOID watchHandle;
     CHAR storePath[256];
+    ULONG seed;
+    ULONG numPages;
+    DWORD pid = GetCurrentProcessId();
+    CHAR msg[256];
+    ULONG refs[PAGES_MAX];
+
+    if (argc < 3)
+    {
+        Usage(argv[0]);
+        return 1;
+    }
 
     XenifaceRegisterLogger(XifLogger);
     XenifaceSetLogLevel(XLL_DEBUG);
@@ -231,26 +245,30 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     status = XenifaceOpen(&xif);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] Error opening the device: 0x%x\n", status);
+        wprintf(L"[!] Error opening xen interface device: 0x%x\n", status);
         return 1;
     }
 
-    ctx.event = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (!ctx.event)
+    ctx.MsgEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (!ctx.MsgEvent)
     {
-        wprintf(L"[!] CreateEvent failed: 0x%x\n", GetLastError());
+        wprintf(L"[!] CreateEvent(msg) failed: 0x%x\n", GetLastError());
         return 1;
     }
 
-    ctx.storeEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (!ctx.storeEvent)
+    ctx.StoreEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (!ctx.StoreEvent)
     {
-        wprintf(L"[!] CreateEvent failed: 0x%x\n", GetLastError());
+        wprintf(L"[!] CreateEvent(store) failed: 0x%x\n", GetLastError());
         return 1;
     }
 
-    ctx.exit = FALSE;
-    ctx.xif = xif;
+    seed = GetTickCount();
+    srand(seed);
+    wprintf(L"[*] pid: %lu, seed: %lu\n", pid, seed);
+
+    ctx.Exit = FALSE;
+    ctx.Xif = xif;
 
     if (argc < 4)
         loops = 60;
@@ -259,33 +277,29 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
     if (argv[1][0] == L's') // server
     {
-        ULONG refs[NUM_PAGES];
+        ctx.RemoteDomain = (USHORT)_wtoi(argv[2]);
+        numPages = 1 + (rand() % PAGES_MAX);
 
-        remoteDomain = (USHORT)_wtoi(argv[2]);
-
-        status = StoreTest(xif, remoteDomain, &localDomain);
+        status = StoreTest(xif, pid, ctx.RemoteDomain, &ctx.LocalDomain);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] StoreTest failed: 0x%x\n", status);
             return 1;
         }
 
-        ctx.localDomain = localDomain;
-        ctx.remoteDomain = remoteDomain;
-
-        status = EvtchnBindUnboundPort(xif, remoteDomain, ctx.event, FALSE, &localPort);
+        status = EvtchnBindUnboundPort(xif, ctx.RemoteDomain, ctx.MsgEvent, FALSE, &localPort);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] EvtchnBindUnboundPort failed: 0x%x\n", status);
+            wprintf(L"[!] EvtchnBindUnboundPort(%u) failed: 0x%x\n", ctx.RemoteDomain, status);
             return 1;
         }
 
         wprintf(L"[*] local event port: %lu\n", localPort);
-        wprintf(L"[*] granting %d pages to remote domain %d\n", NUM_PAGES, remoteDomain);
+        wprintf(L"[*] granting %lu pages to remote domain %u\n", numPages, ctx.RemoteDomain);
         status = GnttabGrantPages(xif,
-                                  remoteDomain,
-                                  NUM_PAGES,
-                                  SERVER_NOTIFY_OFFSET,
+                                  ctx.RemoteDomain,
+                                  numPages,
+                                  FIELD_OFFSET(SHARED_MEM, ServerFlag),
                                   localPort,
                                   GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
                                   &mapHandle,
@@ -297,24 +311,27 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             return 1;
         }
 
+        shm->ServerPid = pid;
         shm->EventPort = localPort;
+        shm->NumberPages = numPages;
 
         wprintf(L"[*] grant ok, va=%p, context %p, refs: ", shm, mapHandle);
-        for (i = 0; i < NUM_PAGES; i++)
+        for (i = 0; i < numPages; i++)
         {
             shm->References[i] = refs[i];
             wprintf(L"%d ", refs[i]);
         }
-        wprintf(L"\n");
+        wprintf(L"\npress any key to continue\n");
+        getc(stdin);
 
-        ctx.va = shm;
-        ctx.is_server = TRUE;
+        ctx.Shm = shm;
+        ctx.IsServer = TRUE;
         CreateThread(NULL, 0, EventThreadProc, &ctx, 0, NULL);
 
         // setup xenstore watch
-        sprintf(storePath, "/local/domain/%d/data/xiftest/%d", remoteDomain, localDomain);
+        StringCbPrintfA(storePath, sizeof(storePath), "/local/domain/%d/data/xiftest-%d/%d", ctx.RemoteDomain, pid, ctx.LocalDomain);
         wprintf(L"[*] Adding xenstore watch on '%S'\n", storePath);
-        status = StoreAddWatch(xif, storePath, ctx.storeEvent, &watchHandle);
+        status = StoreAddWatch(xif, storePath, ctx.StoreEvent, &watchHandle);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] StoreAddWatch failed: 0x%x\n", status);
@@ -322,17 +339,25 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         }
 
         // let the client know we're live
-        SERVER_FLAG(shm) = 1;
+        shm->ServerFlag = 1;
 
-        ReadShm(shm);
-        sprintf(storePath, "data/xiftest/%d", remoteDomain);
+        StringCbPrintfA(storePath, sizeof(storePath), "data/xiftest-%d/%d", pid, ctx.RemoteDomain);
         for (i = 0; i < loops; i++)
         {
-            _snprintf(shm->Message, sizeof(shm->Message), "XIFMAP %lu", i);
-            StoreWrite(xif, storePath, shm->Message);
+            // write to the shared key
+            StringCbPrintfA(msg, sizeof(msg), "XIFTEST %lu", i);
+            StoreWrite(xif, storePath, msg); // this should cause peer's xenstore watch to fire
+            // fill shared memory with random data
+            for (ULONG j = 0; j < DATA_SIZE(numPages); j++)
+                DATA_PTR(shm)[j] = rand() % 256;
+            // update crc
+            crc64(&shm->Crc, DATA_PTR(shm), DATA_SIZE(numPages));
             ReadShm(shm);
-            Sleep(1000);
-            if (ctx.exit)
+            Sleep(rand() % 1000);
+            // notify the client
+            EvtchnNotify(xif, localPort);
+            Sleep(rand() % 1000);
+            if (ctx.Exit)
                 break;
         }
         ReadShm(shm);
@@ -347,25 +372,12 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     }
     else // client
     {
-        ULONG refs[NUM_PAGES];
-
-        remoteDomain = (USHORT)_wtoi(argv[1]);
-
-        status = StoreTest(xif, remoteDomain, &localDomain);
-        if (status != ERROR_SUCCESS)
-        {
-            wprintf(L"[!] StoreTest failed: 0x%x\n", status);
-            return 1;
-        }
-
-        ctx.localDomain = localDomain;
-        ctx.remoteDomain = remoteDomain;
-
+        ctx.RemoteDomain = (USHORT)_wtoi(argv[1]);
         refs[0] = _wtoi(argv[2]);
-        wprintf(L"[*] performing initial one-page map: remote domain %d, ref %lu\n", remoteDomain, refs[0]);
+        wprintf(L"[*] performing initial one-page map: remote domain %d, ref %lu\n", ctx.RemoteDomain, refs[0]);
 
         status = GnttabMapForeignPages(xif,
-                                       remoteDomain,
+                                       ctx.RemoteDomain,
                                        1,
                                        refs,
                                        0,
@@ -379,26 +391,34 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             return 1;
         }
 
-        wprintf(L"[*] initial map ok: va=%p, context %p, remote event port %lu, refs: ", shm, mapHandle, shm->EventPort);
-        for (i = 0; i < NUM_PAGES; i++)
+        numPages = shm->NumberPages;
+        wprintf(L"[*] initial map ok: va=%p, context %p, remote event port %lu, remote pid %lu, %lu refs: ",
+                shm, mapHandle, shm->EventPort, shm->ServerPid, numPages);
+        for (i = 0; i < numPages; i++)
         {
-            refs[i] = shm->References[i]; // read refs for all pages
+            refs[i] = shm->References[i]; // read refs for all pages and store locally since we're remapping the shared memory
             wprintf(L"%lu ", refs[i]);
         }
         wprintf(L"\n");
 
+        status = StoreTest(xif, shm->ServerPid, ctx.RemoteDomain, &ctx.LocalDomain);
+        if (status != ERROR_SUCCESS)
+        {
+            wprintf(L"[!] StoreTest failed: 0x%x\n", status);
+            return 1;
+        }
+
         // bind event channel
-        wprintf(L"[*] binding event channel: remote domain %d, remote port %lu\n", remoteDomain, shm->EventPort);
-        status = EvtchnBindInterdomain(xif, remoteDomain, shm->EventPort, ctx.event, FALSE, &localPort);
+        wprintf(L"[*] binding event channel: remote domain %d, remote port %lu\n", ctx.RemoteDomain, shm->EventPort);
+        status = EvtchnBindInterdomain(xif, ctx.RemoteDomain, shm->EventPort, ctx.MsgEvent, FALSE, &localPort);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] EvtchnBindInterdomain failed: 0x%x\n", status);
             return 1;
         }
-        wprintf(L"[*] local event port: %lu\n", localPort);
+        wprintf(L"[*] local event port: %lu, remapping the full region\n", localPort);
 
         // unmap
-        wprintf(L"[*] remapping the full region\n");
         status = GnttabUnmapForeignPages(xif, mapHandle);
         if (status != ERROR_SUCCESS)
         {
@@ -408,10 +428,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
         // map the full range with notifications
         status = GnttabMapForeignPages(xif,
-                                       remoteDomain,
-                                       NUM_PAGES,
+                                       ctx.RemoteDomain,
+                                       numPages,
                                        refs,
-                                       CLIENT_NOTIFY_OFFSET,
+                                       FIELD_OFFSET(SHARED_MEM, ClientFlag),
                                        localPort,
                                        GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
                                        &mapHandle,
@@ -426,9 +446,9 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ReadShm(shm);
 
         // setup xenstore watch
-        sprintf(storePath, "/local/domain/%d/data/xiftest/%d", remoteDomain, localDomain);
+        StringCbPrintfA(storePath, sizeof(storePath), "/local/domain/%d/data/xiftest-%d/%d", ctx.RemoteDomain, shm->ServerPid, ctx.LocalDomain);
         wprintf(L"[*] Adding xenstore watch on '%S'\n", storePath);
-        status = StoreAddWatch(xif, storePath, ctx.storeEvent, &watchHandle);
+        status = StoreAddWatch(xif, storePath, ctx.StoreEvent, &watchHandle);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] StoreAddWatch failed: 0x%x\n", status);
@@ -436,7 +456,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         }
 
         // let the server know we're live
-        CLIENT_FLAG(shm) = 1;
+        shm->ClientFlag = 1;
         status = EvtchnNotify(xif, localPort);
         if (status != ERROR_SUCCESS)
         {
@@ -444,17 +464,17 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             return 1;
         }
 
-        ctx.va = shm;
-        ctx.is_server = FALSE;
+        ctx.Shm = shm;
+        ctx.IsServer = FALSE;
         CreateThread(NULL, 0, EventThreadProc, &ctx, 0, NULL);
 
-        sprintf(storePath, "data/xiftest/%d", remoteDomain);
+        StringCbPrintfA(storePath, sizeof(storePath), "data/xiftest-%d/%d", shm->ServerPid, ctx.RemoteDomain);
         for (i = 0; i < 60; i++)
         {
-            ReadShm(shm);
-            StoreWrite(xif, storePath, shm->Message);
-            Sleep(1000);
-            if (ctx.exit)
+            StringCbPrintfA(msg, sizeof(msg), "XIFTEST %lu", i);
+            StoreWrite(xif, storePath, msg); // this should cause peer's xenstore watch to fire
+            Sleep(rand() % 1000);
+            if (ctx.Exit)
                 break;
         }
         ReadShm(shm);
@@ -469,7 +489,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         }
     }
 
-    // close event channel
     status = EvtchnClose(xif, localPort);
     if (status != ERROR_SUCCESS)
     {
@@ -477,7 +496,14 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
-    wprintf(L"[*] event channel closed, exiting\n");
+    status = StoreRemoveWatch(xif, watchHandle);
+    if (status != ERROR_SUCCESS)
+    {
+        wprintf(L"[!] StoreRemoveWatch failed: 0x%x\n", status);
+        return 1;
+    }
+
+    wprintf(L"[*] exiting\n");
 
     // all handles will be closed on exit
     return 0;
