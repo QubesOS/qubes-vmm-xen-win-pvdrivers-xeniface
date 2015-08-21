@@ -628,11 +628,16 @@ EvtchnDpc(
     UNREFERENCED_PARAMETER(Argument1);
     UNREFERENCED_PARAMETER(Argument2);
 
-    if (!Ctx)
-        return;
+    ASSERT(Context);
 
-    XenIfaceDebugPrint(TRACE, "Signaled Channel %p, LocalPort %d, IRQL %d\n", Ctx->Channel, Ctx->LocalPort, KeGetCurrentIrql());
-    KeSetEvent(Ctx->Event, 0, FALSE);
+    XenIfaceDebugPrint(TRACE, "Channel %p, LocalPort %d, Active %d\n", Ctx->Channel, Ctx->LocalPort, Ctx->Active);
+    if (Ctx->Active)
+        KeSetEvent(Ctx->Event, 0, FALSE);
+
+    XENBUS_EVTCHN(Unmask,
+                  &Ctx->Fdo->EvtchnInterface,
+                  Ctx->Channel,
+                  FALSE);
 }
 
 _Function_class_(KSERVICE_ROUTINE)
@@ -648,10 +653,11 @@ EvtchnCallback(
     PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument;
 
     UNREFERENCED_PARAMETER(Interrupt);
-    ASSERT(Context != NULL);
+    ASSERT(Context);
 
     // we're running at high irql, queue a dpc to signal the event
-    KeInsertQueueDpc(&Context->Dpc, NULL, NULL);
+    if (Context->Active)
+        KeInsertQueueDpc(&Context->Dpc, NULL, NULL);
 
     return TRUE;
 }
@@ -666,9 +672,9 @@ EvtchnFree(
     XenIfaceDebugPrint(TRACE, "Record %p, LocalPort %d, Process %p\n", Context, Context->LocalPort, Context->Process);
     XENBUS_EVTCHN(Close, &Fdo->EvtchnInterface, Context->Channel);
 
-    // Cancel the DPC if queued, otherwise the OS may access invalid memory after we free the context.
-    if (KeRemoveQueueDpc(&Context->Dpc))
-        XenIfaceDebugPrint(TRACE, "Removing pending DPC %p, cpu %lu\n", &Context->Dpc, KeGetCurrentProcessorNumber());
+    InterlockedExchange8(&Context->Active, 0);
+    // Wait for our DPCs to complete
+    KeFlushQueuedDpcs();
 
     ObDereferenceObject(Context->Event);
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
@@ -859,7 +865,7 @@ IoctlEvtchnBindUnboundPort(
                                      EvtchnCallback,
                                      Context,
                                      In->RemoteDomain,
-                                     FALSE);
+                                     TRUE);
     if (Context->Channel == NULL)
         goto fail4;
 
@@ -867,12 +873,14 @@ IoctlEvtchnBindUnboundPort(
                                        &Fdo->EvtchnInterface,
                                        Context->Channel);
 
+    Context->Fdo = Fdo;
     KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     InsertTailList(&Fdo->EvtchnList, &Context->Entry);
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
+    InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
     *Info = sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT);
 
@@ -943,7 +951,7 @@ IoctlEvtchnBindInterdomain(
                                      Context,
                                      In->RemoteDomain,
                                      In->RemotePort,
-                                     FALSE);
+                                     TRUE);
     if (Context->Channel == NULL)
         goto fail4;
 
@@ -951,14 +959,15 @@ IoctlEvtchnBindInterdomain(
                                        &Fdo->EvtchnInterface,
                                        Context->Channel);
 
+    Context->Fdo = Fdo;
     KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     InsertTailList(&Fdo->EvtchnList, &Context->Entry);
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
+    InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
-
     *Info = sizeof(EVTCHN_BIND_INTERDOMAIN_OUT);
 
     if (!In->Mask) {
