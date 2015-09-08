@@ -31,7 +31,7 @@
 [Version]
 Signature="$WINDOWS NT$"
 Class=System
-ClassGUID={4d36e97d-e325-11ce-bfc1-08002be10318}
+ClassGUID={4d36e97d-e325-11ce-bfc1-08002be10318} 
 Provider=%Vendor%
 DriverVer=01/01/1900,0.0.0.0
 CatalogFile=xeniface.cat
@@ -104,7 +104,7 @@ xeniface_coinst.dll=1,,
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
-Vendor= "@VENDOR_NAME@"
+Vendor= "@VENDOR_NAME@" 
 DiskId1 = "@PRODUCT_NAME@ Interface Package"
 XenIfaceDevice.DeviceDesc = "@PRODUCT_NAME@ Interface"
 LITESVC_FLAGS= 0x00000800
