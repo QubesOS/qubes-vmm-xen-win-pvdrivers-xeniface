@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+
 #include <ntddk.h>
 #include <wdmguid.h>
 #include <ntstrsafe.h>
@@ -38,6 +39,7 @@
 #include <evtchn_interface.h>
 #include <gnttab_interface.h>
 #include <suspend_interface.h>
+
 
 #include "driver.h"
 #include "registry.h"
@@ -55,6 +57,7 @@
 #define FDO_POOL 'ODF'
 
 #define MAXNAMELEN  128
+
 
 static void
 FdoInitialiseXSRegistryEntries(
@@ -133,6 +136,7 @@ failXS:
     return;
 }
 
+
 #define REGISTRY_WRITE_EVENT 0
 #define REGISTRY_THREAD_END_EVENT 1
 #define REGISTRY_EVENTS 2
@@ -151,6 +155,7 @@ static NTSTATUS FdoRegistryThreadHandler(IN  PXENIFACE_THREAD  Self,
     threadevents[REGISTRY_THREAD_END_EVENT] = Event;
 
     for(;;) {
+
         status = KeWaitForMultipleObjects(REGISTRY_EVENTS, (PVOID *)threadevents, WaitAny, Executive, KernelMode, TRUE, NULL, NULL);
         if ((status>=STATUS_WAIT_0) && (status < STATUS_WAIT_0+REGISTRY_EVENTS)) {
             if (status == STATUS_WAIT_0+REGISTRY_WRITE_EVENT) {
@@ -163,13 +168,17 @@ static NTSTATUS FdoRegistryThreadHandler(IN  PXENIFACE_THREAD  Self,
                     return STATUS_SUCCESS;
                 KeClearEvent(threadevents[REGISTRY_THREAD_END_EVENT]);
             }
+
         }
         else if (!NT_SUCCESS(status)) {
             XenIfaceDebugPrint(ERROR, "Registry handler thread failed %x\n", status);
             return status;
         }
     }
+
 }
+
+
 
 static FORCEINLINE PVOID
 __FdoAllocate(
@@ -512,6 +521,7 @@ FdoReleaseMutex(
         FdoDestroy(Fdo);
 }
 
+
 static FORCEINLINE PANSI_STRING
 __FdoMultiSzToUpcaseAnsi(
     IN  PCHAR       Buffer
@@ -589,6 +599,7 @@ __FdoFreeAnsi(
 
     __FdoFree(Ansi);
 }
+
 
 static DECLSPEC_NOINLINE VOID
 FdoParseResources(
@@ -882,6 +893,7 @@ FdoStartDevice(
     if (!NT_SUCCESS(status))
         goto fail4;
 
+
     if (__FdoGetDevicePnpState(Fdo) != Stopped) {
         status = WmiInit(Fdo);
         if (!NT_SUCCESS(status))
@@ -889,6 +901,7 @@ FdoStartDevice(
     }
 
     __FdoSetDevicePnpState(Fdo, Started);
+
 
     status = Irp->IoStatus.Status;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -910,6 +923,7 @@ fail3:
     __FdoSetSystemPowerState(Fdo, PowerSystemSleeping3);
     FdoS3ToS4(Fdo);
     __FdoSetSystemPowerState(Fdo, PowerSystemShutdown);
+
 
     RtlZeroMemory(&Fdo->Resource, sizeof (FDO_RESOURCE) * RESOURCE_COUNT);
 
@@ -970,6 +984,7 @@ FdoStopDevice(
     __FdoSetSystemPowerState(Fdo, PowerSystemSleeping3);
     FdoS3ToS4(Fdo);
     __FdoSetSystemPowerState(Fdo, PowerSystemShutdown);
+
 
     RtlZeroMemory(&Fdo->Resource, sizeof (FDO_RESOURCE) * RESOURCE_COUNT);
 
@@ -1080,6 +1095,7 @@ done:
 
     return status;
 }
+
 
 static DECLSPEC_NOINLINE NTSTATUS
 FdoQueryCapabilities(
@@ -1461,6 +1477,7 @@ __FdoSetSystemPowerUp(
     IN  PIRP            Irp
     )
 {
+
     PIO_STACK_LOCATION  StackLocation;
     SYSTEM_POWER_STATE  SystemState;
     DEVICE_POWER_STATE  DeviceState;
@@ -1718,6 +1735,7 @@ __FdoQuerySystemPowerUp(
     IN  PIRP            Irp
     )
 {
+
     PIO_STACK_LOCATION  StackLocation;
     SYSTEM_POWER_STATE  SystemState;
     DEVICE_POWER_STATE  DeviceState;
@@ -2014,6 +2032,7 @@ FdoCreateFile (
 {
     NTSTATUS     status;
 
+
     XenIfaceDebugPrint(TRACE, "Create \n");
 
     if (Deleted == fdoData->Dx->DevicePnpState)
@@ -2023,6 +2042,7 @@ FdoCreateFile (
         return STATUS_NO_SUCH_DEVICE;
     }
 
+
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = 0;
     Irp->IoStatus.Status = status;
@@ -2031,6 +2051,7 @@ FdoCreateFile (
     return status;
 }
 
+
 NTSTATUS
 FdoClose (
     __in PXENIFACE_FDO fdoData,
@@ -2038,6 +2059,7 @@ FdoClose (
     )
 
 {
+
     NTSTATUS     status;
 
     XenIfaceDebugPrint(TRACE, "Close \n");
@@ -2050,6 +2072,7 @@ FdoClose (
     return status;
 }
 
+
 NTSTATUS
 FdoReadWrite (
     __in PXENIFACE_FDO fdoData,
@@ -2057,6 +2080,7 @@ FdoReadWrite (
     )
 
 {
+
     NTSTATUS     status;
 
     XenIfaceDebugPrint(TRACE, "ReadWrite called\n");
@@ -2068,6 +2092,8 @@ FdoReadWrite (
 
     return status;
 }
+
+
 
 NTSTATUS
 FdoDispatch(
@@ -2448,6 +2474,9 @@ fail1:
     return status;
 }
 
+
+
+
 VOID
 FdoDestroy(
     IN  PXENIFACE_FDO     Fdo
@@ -2535,3 +2564,5 @@ FdoDestroy(
 
     IoDeleteDevice(FunctionDeviceObject);
 }
+
+

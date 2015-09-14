@@ -69,7 +69,6 @@ typedef struct _XENIFACE_GRANT_CONTEXT {
 
 typedef struct _XENIFACE_MAP_CONTEXT {
     LIST_ENTRY Entry;
-    ULONG *Handles;
     PEPROCESS Process;
     USHORT RemoteDomain;
     ULONG NumberPages;

@@ -1150,63 +1150,6 @@ fail1:
     return status;
 }
 
-static DECLSPEC_NOINLINE
-NTSTATUS
-IoctlEvtchnStatus(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
-    __in  ULONG             InLen,
-    __in  ULONG             OutLen,
-    __out PULONG_PTR        Info
-    )
-{
-    NTSTATUS status;
-    PEVTCHN_STATUS_IN In = (PEVTCHN_STATUS_IN)Buffer;
-    PEVTCHN_STATUS_OUT Out = (PEVTCHN_STATUS_OUT)Buffer;
-    PXENIFACE_EVTCHN_CONTEXT Record = NULL;
-    KIRQL Irql;
-
-    status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_STATUS_IN) || OutLen != sizeof(EVTCHN_STATUS_OUT))
-        goto fail1;
-
-    XenIfaceDebugPrint(TRACE, "> LocalPort %d\n", In->LocalPort);
-
-    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-
-    Record = EvtchnFindChannel(Fdo, In->LocalPort);
-
-    status = STATUS_INVALID_PARAMETER;
-    if (Record == NULL)
-        goto fail2;
-
-    status = XENBUS_EVTCHN(Status,
-                           &Fdo->EvtchnInterface,
-                           Record->Channel,
-                           &Out->Status);
-
-    if (!NT_SUCCESS(status))
-        goto fail3;
-
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
-
-    XenIfaceDebugPrint(TRACE, "< Status %lu\n", Out->Status);
-    *Info = sizeof(EVTCHN_STATUS_OUT);
-
-    return status;
-
-fail3:
-    XenIfaceDebugPrint(ERROR, "Fail3\n");
-
-fail2:
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
-    XenIfaceDebugPrint(ERROR, "Fail2\n");
-
-fail1:
-    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
-    return status;
-}
-
 __drv_requiresIRQL(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
@@ -1553,34 +1496,26 @@ IoctlGnttabMapForeignPages(
     for (ULONG i = 0; i < In->NumberPages; i++)
         XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[i]);
 
-    status = STATUS_NO_MEMORY;
-    Context->Handles = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * sizeof(ULONG), XENIFACE_POOL_TAG);
-    if (Context->Handles == NULL)
-        goto fail5;
-
-    RtlZeroMemory(Context->Handles, Context->NumberPages * sizeof(ULONG));
-
     status = XENBUS_GNTTAB(MapForeignPages,
                            &Fdo->GnttabInterface,
                            Context->RemoteDomain,
                            Context->NumberPages,
                            In->References,
                            Context->Flags & GNTTAB_GRANT_PAGES_READONLY,
-                           &Context->Address,
-                           Context->Handles);
+                           &Context->Address);
 
     if (!NT_SUCCESS(status))
-        goto fail6;
+        goto fail5;
 
     status = STATUS_NO_MEMORY;
     Context->KernelVa = MmMapIoSpace(Context->Address, Context->NumberPages * PAGE_SIZE, MmCached);
     if (Context->KernelVa == NULL)
-        goto fail7;
+        goto fail6;
 
     status = STATUS_NO_MEMORY;
     Context->Mdl = IoAllocateMdl(Context->KernelVa, Context->NumberPages * PAGE_SIZE, FALSE, FALSE, NULL);
     if (Context->Mdl == NULL)
-        goto fail8;
+        goto fail7;
 
     MmBuildMdlForNonPagedPool(Context->Mdl);
 
@@ -1591,7 +1526,7 @@ IoctlGnttabMapForeignPages(
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
-        goto fail9;
+        goto fail8;
     }
 
     XenIfaceDebugPrint(TRACE, "< Record %p, Address %p, KernelVa %p, UserVa %p\n", Context, Context->Address, Context->KernelVa, Context->UserVa);
@@ -1608,26 +1543,20 @@ IoctlGnttabMapForeignPages(
 
     return STATUS_SUCCESS;
 
-fail9:
-    XenIfaceDebugPrint(ERROR, "Fail9\n");
-    IoFreeMdl(Context->Mdl);
-
 fail8:
     XenIfaceDebugPrint(ERROR, "Fail8\n");
-    MmUnmapIoSpace(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
+    IoFreeMdl(Context->Mdl);
 
 fail7:
     XenIfaceDebugPrint(ERROR, "Fail7\n");
-    ASSERT(NT_SUCCESS(XENBUS_GNTTAB(UnmapForeignPages,
-                                    &Fdo->GnttabInterface,
-                                    Context->NumberPages,
-                                    Context->Address,
-                                    Context->Handles
-                                    )));
+    MmUnmapIoSpace(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
-    ExFreePoolWithTag(Context->Handles, XENIFACE_POOL_TAG);
+    ASSERT(NT_SUCCESS(XENBUS_GNTTAB(UnmapForeignPages,
+                                    &Fdo->GnttabInterface,
+                                    Context->Address
+                                    )));
 
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
@@ -1683,16 +1612,10 @@ GnttabFreeMap(
     // undo mapping
     status = XENBUS_GNTTAB(UnmapForeignPages,
                            &Fdo->GnttabInterface,
-                           Context->NumberPages,
-                           Context->Address,
-                           Context->Handles
-                           );
+                           Context->Address);
 
     if (!NT_SUCCESS(status))
         goto fail1;
-
-    RtlZeroMemory(Context->Handles, Context->NumberPages * sizeof(ULONG));
-    ExFreePoolWithTag(Context->Handles, XENIFACE_POOL_TAG);
 
     RtlZeroMemory(Context, sizeof(XENIFACE_MAP_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
@@ -1703,8 +1626,6 @@ fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x), leaking io memory: physical address %p size 0x%x\n",
                        status, Context->Address, Context->NumberPages * PAGE_SIZE);
     // we can't free the memory since it's still mapped
-    RtlZeroMemory(Context->Handles, Context->NumberPages * sizeof(ULONG));
-    ExFreePoolWithTag(Context->Handles, XENIFACE_POOL_TAG);
     RtlZeroMemory(Context, sizeof(XENIFACE_MAP_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
     return status;
@@ -1822,10 +1743,6 @@ XenIFaceIoctl(
 
     case IOCTL_XENIFACE_EVTCHN_UNMASK:
         status = IoctlEvtchnUnmask(Fdo, (PCHAR)Buffer, InLen, OutLen);
-        break;
-
-    case IOCTL_XENIFACE_EVTCHN_STATUS:
-        status = IoctlEvtchnStatus(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
         // gnttab

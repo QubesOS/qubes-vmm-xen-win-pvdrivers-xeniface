@@ -130,9 +130,9 @@ DWORD StoreTest(IN HANDLE xif, IN ULONG serverPid, IN USHORT remoteDomain, OUT U
     *localDomain = (USHORT)atoi(value);
 
     perms[0].Domain = *localDomain; // our domain
-    perms[0].Mask = XS_PERM_NONE; // no permissions to others
+    perms[0].Mask = XENBUS_STORE_PERM_NONE; // no permissions to others
     perms[1].Domain = remoteDomain; // peer
-    perms[1].Mask = XS_PERM_READ;
+    perms[1].Mask = XENBUS_STORE_PERM_READ;
 
     StringCbPrintfA(path, sizeof(path), "xiftest-%d", pid);
     StringCbPrintfA(value, sizeof(value), "this is a test");

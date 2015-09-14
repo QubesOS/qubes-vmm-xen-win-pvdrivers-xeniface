@@ -180,6 +180,20 @@ typedef VOID
     IN  PXENBUS_EVTCHN_CHANNEL  Channel
     );
 
+/*! \typedef XENBUS_EVTCHN_WAIT
+    \brief Wait for an event to the local end of the channel
+
+    \param Interface The interface header
+    \param Channel The channel handle
+    \param Timeout An optional timeout value (similar to KeWaitForSingleObject(), but non-zero values are allowed at DISPATCH_LEVEL).
+*/
+typedef NTSTATUS
+(*XENBUS_EVTCHN_WAIT)(
+    IN  PINTERFACE              Interface,
+    IN  PXENBUS_EVTCHN_CHANNEL  Channel,
+    IN  PLARGE_INTEGER          Timeout OPTIONAL
+    );
+
 /*! \typedef XENBUS_EVTCHN_GET_PORT
     \brief Get the local port number bound to the channel
 
@@ -203,20 +217,6 @@ typedef VOID
 (*XENBUS_EVTCHN_CLOSE)(
     IN  PINTERFACE              Interface,
     IN  PXENBUS_EVTCHN_CHANNEL  Channel
-    );
-
-/*! \typedef XENBUS_EVTCHN_STATUS
-    \brief Get the channel status
-
-    \param Interface The interface header
-    \param Channel The channel handle
-    \param Status The channel status (EVTCHNSTAT_*)
-*/
-typedef NTSTATUS
-(*XENBUS_EVTCHN_STATUS)(
-    IN  PINTERFACE              Interface,
-    IN  PXENBUS_EVTCHN_CHANNEL  Channel,
-    OUT ULONG                   *Status
     );
 
 // {BE2440AC-1098-4150-AF4D-452FADCEF923}
@@ -303,9 +303,9 @@ struct _XENBUS_EVTCHN_INTERFACE_V5 {
     XENBUS_EVTCHN_UNMASK    EvtchnUnmask;
     XENBUS_EVTCHN_SEND      EvtchnSend;
     XENBUS_EVTCHN_TRIGGER   EvtchnTrigger;
+    XENBUS_EVTCHN_WAIT      EvtchnWait;
     XENBUS_EVTCHN_GET_PORT  EvtchnGetPort;
     XENBUS_EVTCHN_CLOSE     EvtchnClose;
-    XENBUS_EVTCHN_STATUS    EvtchnStatus;
 };
 
 typedef struct _XENBUS_EVTCHN_INTERFACE_V5 XENBUS_EVTCHN_INTERFACE, *PXENBUS_EVTCHN_INTERFACE;
