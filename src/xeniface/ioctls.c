@@ -466,7 +466,6 @@ IoctlStoreAddWatch(
     PSTORE_ADD_WATCH_OUT Out = (PSTORE_ADD_WATCH_OUT)Buffer;
     PCHAR Path;
     PXENIFACE_STORE_CONTEXT Context;
-    KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(STORE_ADD_WATCH_IN) || OutLen != sizeof(STORE_ADD_WATCH_OUT))
@@ -509,9 +508,7 @@ IoctlStoreAddWatch(
 
     FreeCapturedBuffer(Path);
 
-    KeAcquireSpinLock(&Fdo->StoreWatchLock, &Irql);
-    InsertTailList(&Fdo->StoreWatchList, &Context->Entry);
-    KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
+    ExInterlockedInsertTailList(&Fdo->StoreWatchList, &Context->Entry, &Fdo->StoreWatchLock);
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Watch %p\n", Context, Context->Watch);
 
@@ -839,7 +836,6 @@ IoctlEvtchnBindUnboundPort(
     PEVTCHN_BIND_UNBOUND_PORT_IN In = (PEVTCHN_BIND_UNBOUND_PORT_IN)Buffer;
     PEVTCHN_BIND_UNBOUND_PORT_OUT Out = (PEVTCHN_BIND_UNBOUND_PORT_OUT)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context;
-    KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_IN) || OutLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT))
@@ -878,9 +874,7 @@ IoctlEvtchnBindUnboundPort(
     Context->Fdo = Fdo;
     KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
-    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-    InsertTailList(&Fdo->EvtchnList, &Context->Entry);
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+    ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
     InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
@@ -924,7 +918,6 @@ IoctlEvtchnBindInterdomain(
     PEVTCHN_BIND_INTERDOMAIN_IN In = (PEVTCHN_BIND_INTERDOMAIN_IN)Buffer;
     PEVTCHN_BIND_INTERDOMAIN_OUT Out = (PEVTCHN_BIND_INTERDOMAIN_OUT)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context;
-    KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(EVTCHN_BIND_INTERDOMAIN_IN) || OutLen != sizeof(EVTCHN_BIND_INTERDOMAIN_OUT))
@@ -964,9 +957,7 @@ IoctlEvtchnBindInterdomain(
     Context->Fdo = Fdo;
     KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
-    KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-    InsertTailList(&Fdo->EvtchnList, &Context->Entry);
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+    ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
     InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
@@ -1257,7 +1248,6 @@ IoctlGnttabGrantPages(
     PGNTTAB_GRANT_PAGES_IN In = (PGNTTAB_GRANT_PAGES_IN)Buffer;
     PGNTTAB_GRANT_PAGES_OUT Out = (PGNTTAB_GRANT_PAGES_OUT)Buffer;
     PXENIFACE_GRANT_CONTEXT Context;
-    KIRQL Irql;
     ULONG Page;
 
     status = STATUS_INVALID_BUFFER_SIZE;
@@ -1351,9 +1341,7 @@ IoctlGnttabGrantPages(
         XenIfaceDebugPrint(INFO, "Ref[%lu] = %lu\n", Page, Out->References[Page]);
     }
 
-    KeAcquireSpinLock(&Fdo->GnttabGrantLock, &Irql);
-    InsertTailList(&Fdo->GnttabGrantList, &Context->Entry);
-    KeReleaseSpinLock(&Fdo->GnttabGrantLock, Irql);
+    ExInterlockedInsertTailList(&Fdo->GnttabGrantList, &Context->Entry, &Fdo->GnttabGrantLock);
 
     *Info = sizeof(GNTTAB_GRANT_PAGES_OUT) + sizeof(ULONG) * Context->NumberPages;
 
@@ -1461,7 +1449,6 @@ IoctlGnttabMapForeignPages(
     PGNTTAB_MAP_FOREIGN_PAGES_IN In = (PGNTTAB_MAP_FOREIGN_PAGES_IN)Buffer;
     PGNTTAB_MAP_FOREIGN_PAGES_OUT Out = (PGNTTAB_MAP_FOREIGN_PAGES_OUT)Buffer;
     PXENIFACE_MAP_CONTEXT Context;
-    KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen < sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) || OutLen != sizeof(GNTTAB_MAP_FOREIGN_PAGES_OUT))
@@ -1535,9 +1522,7 @@ IoctlGnttabMapForeignPages(
     Out->Context = Context;
     Out->Address = Context->UserVa;
 
-    KeAcquireSpinLock(&Fdo->GnttabMapLock, &Irql);
-    InsertTailList(&Fdo->GnttabMapList, &Context->Entry);
-    KeReleaseSpinLock(&Fdo->GnttabMapLock, Irql);
+    ExInterlockedInsertTailList(&Fdo->GnttabMapList, &Context->Entry, &Fdo->GnttabMapLock);
 
     *Info = sizeof(GNTTAB_MAP_FOREIGN_PAGES_OUT);
 
