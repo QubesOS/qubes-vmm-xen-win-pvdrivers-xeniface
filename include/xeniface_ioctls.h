@@ -87,7 +87,6 @@ typedef struct _STORE_SET_PERMISSIONS_IN
 
 typedef struct _STORE_ADD_WATCH_IN
 {
-    ULONG Id;
     PCHAR Path;
     ULONG PathLength; // number of bytes, including the null terminator
     HANDLE Event;
