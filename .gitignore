@@ -13,3 +13,5 @@
 wmi_generated.h
 include/version.h
 .build_number
+*.sdf
+*.suo
