@@ -90,11 +90,13 @@ typedef struct _XENIFACE_FDO {
     KSPIN_LOCK                      EvtchnLock;
     LIST_ENTRY                      EvtchnList;
 
+    KSPIN_LOCK                      GnttabCacheLock;
+
+    IO_CSQ                          IrpQueue;
+    KSPIN_LOCK                      IrpQueueLock;
+    LIST_ENTRY                      IrpList;
+
     PXENBUS_GNTTAB_CACHE            GnttabCache;
-    KSPIN_LOCK                      GnttabGrantLock;
-    LIST_ENTRY                      GnttabGrantList;
-    KSPIN_LOCK                      GnttabMapLock;
-    LIST_ENTRY                      GnttabMapList;
 
     #define MAX_SESSIONS    (65536)
 
@@ -173,7 +175,5 @@ FdoDispatch(
     IN  PXENIFACE_FDO    Fdo,
     IN  PIRP            Irp
     );
-
-extern PXENIFACE_FDO FdoGlobal;
 
 #endif  // _XENIFACE_FDO_H

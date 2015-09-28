@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\configs.props" />
   <PropertyGroup Label="PropertySheets">
@@ -131,6 +131,7 @@
     <ClCompile Include="../../src/xeniface/fdo.c" />
     <ClCompile Include="../../src/xeniface/registry.c" />
     <ClCompile Include="../../src\xeniface/thread.c" />
+    <ClCompile Include="..\..\src\xeniface\irp_queue.c" />
   </ItemGroup>
   <ItemGroup>
     <Mofcomp Include="../../src/xeniface/wmi.mof">
@@ -147,6 +148,9 @@
   </ItemGroup>
   <ItemGroup>
     <Inf Include="..\xeniface.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\irp_queue.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

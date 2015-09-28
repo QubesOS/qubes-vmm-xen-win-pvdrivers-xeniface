@@ -42,7 +42,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\xencontrol\main.c" />
     <ClCompile Include="..\..\src\xencontrol\xencontrol.c" />
   </ItemGroup>
   <ItemGroup>

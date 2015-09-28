@@ -212,7 +212,7 @@ void XifLogger(XENIFACE_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list 
 
 void Usage(WCHAR *exe)
 {
-    wprintf(L"Usage:\n", exe);
+    wprintf(L"Usage:\n");
     wprintf(L"server: %s server <remote domain id> [number of loops]\n", exe);
     wprintf(L"client: %s <remote domain id> <shared page ref> [number of loops]\n", exe);
 }
@@ -224,7 +224,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     EVT_CTX ctx;
     SHARED_MEM *shm;
     ULONG localPort;
-    PVOID mapHandle;
     PVOID watchHandle;
     CHAR storePath[256];
     ULONG seed;
@@ -302,7 +301,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
                                   FIELD_OFFSET(SHARED_MEM, ServerFlag),
                                   localPort,
                                   GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
-                                  &mapHandle,
                                   &shm,
                                   refs);
         if (status != ERROR_SUCCESS)
@@ -315,7 +313,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         shm->EventPort = localPort;
         shm->NumberPages = numPages;
 
-        wprintf(L"[*] grant ok, va=%p, context %p, refs: ", shm, mapHandle);
+        wprintf(L"[*] grant ok, va=%p, refs: ", shm);
         for (i = 0; i < numPages; i++)
         {
             shm->References[i] = refs[i];
@@ -362,8 +360,8 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         }
         ReadShm(shm);
 
-        wprintf(L"[*] ungranting address %p, context %p\n", shm, mapHandle);
-        status = GnttabUngrantPages(xif, mapHandle);
+        wprintf(L"[*] ungranting address %p\n", shm);
+        status = GnttabUngrantPages(xif, shm);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] GnttabUngrantPages failed: 0x%x\n", status);
@@ -383,7 +381,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
                                        0,
                                        0,
                                        0,
-                                       &mapHandle,
                                        &shm);
         if (status != ERROR_SUCCESS)
         {
@@ -392,8 +389,8 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         }
 
         numPages = shm->NumberPages;
-        wprintf(L"[*] initial map ok: va=%p, context %p, remote event port %lu, remote pid %lu, %lu refs: ",
-                shm, mapHandle, shm->EventPort, shm->ServerPid, numPages);
+        wprintf(L"[*] initial map ok: va=%p, remote event port %lu, remote pid %lu, %lu refs: ",
+                shm, shm->EventPort, shm->ServerPid, numPages);
         for (i = 0; i < numPages; i++)
         {
             refs[i] = shm->References[i]; // read refs for all pages and store locally since we're remapping the shared memory
@@ -419,7 +416,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         wprintf(L"[*] local event port: %lu, remapping the full region\n", localPort);
 
         // unmap
-        status = GnttabUnmapForeignPages(xif, mapHandle);
+        status = GnttabUnmapForeignPages(xif, shm);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] GnttabUnmapForeignPages failed: 0x%x\n", status);
@@ -434,7 +431,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
                                        FIELD_OFFSET(SHARED_MEM, ClientFlag),
                                        localPort,
                                        GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
-                                       &mapHandle,
                                        &shm);
         if (status != ERROR_SUCCESS)
         {
@@ -442,7 +438,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             return 1;
         }
 
-        wprintf(L"[*] full map ok, va=%p, context %p\n", shm, mapHandle);
+        wprintf(L"[*] full map ok, va=%p\n", shm);
         ReadShm(shm);
 
         // setup xenstore watch
@@ -480,8 +476,8 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ReadShm(shm);
 
         // final unmap
-        wprintf(L"[*] unmapping address %p, context %p\n", shm, mapHandle);;
-        status = GnttabUnmapForeignPages(xif, mapHandle);
+        wprintf(L"[*] unmapping address %p\n", shm);;
+        status = GnttabUnmapForeignPages(xif, shm);
         if (status != ERROR_SUCCESS)
         {
             wprintf(L"[!] GnttabUnmapForeignPages failed: 0x%x\n", status);

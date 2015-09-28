@@ -53,6 +53,7 @@
 #include "ioctls.h"
 #include "wmi.h"
 #include "xeniface_ioctls.h"
+#include "irp_queue.h"
 
 #define FDO_POOL 'ODF'
 
@@ -2026,22 +2027,20 @@ FdoDispatchDefault(
 
 NTSTATUS
 FdoCreateFile (
-    __in PXENIFACE_FDO fdoData,
+    __in PXENIFACE_FDO Fdo,
     __inout PIRP Irp
     )
 {
-    NTSTATUS     status;
+    PIO_STACK_LOCATION  Stack = IoGetCurrentIrpStackLocation(Irp);
+    NTSTATUS            status;
 
+    XenIfaceDebugPrint(TRACE, "FO %p, Process %p\n", Stack->FileObject, PsGetCurrentProcess());
 
-    XenIfaceDebugPrint(TRACE, "Create \n");
-
-    if (Deleted == fdoData->Dx->DevicePnpState)
-    {
+    if (Deleted == Fdo->Dx->DevicePnpState) {
         Irp->IoStatus.Status = STATUS_NO_SUCH_DEVICE;
-        IoCompleteRequest (Irp, IO_NO_INCREMENT);
+        IoCompleteRequest(Irp, IO_NO_INCREMENT);
         return STATUS_NO_SUCH_DEVICE;
     }
-
 
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = 0;
@@ -2054,15 +2053,17 @@ FdoCreateFile (
 
 NTSTATUS
 FdoClose (
-    __in PXENIFACE_FDO fdoData,
+    __in PXENIFACE_FDO Fdo,
     __inout PIRP Irp
     )
 
 {
+    PIO_STACK_LOCATION  Stack = IoGetCurrentIrpStackLocation(Irp);
+    NTSTATUS            status;
 
-    NTSTATUS     status;
+    XenIfaceDebugPrint(TRACE, "FO %p, Process %p\n", Stack->FileObject, PsGetCurrentProcess());
 
-    XenIfaceDebugPrint(TRACE, "Close \n");
+    XenIfaceCleanup(Fdo, Stack->FileObject);
 
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = 0;
@@ -2230,8 +2231,6 @@ fail1:
                       (_Size),                                                          \
                       (_Optional))
 
-PXENIFACE_FDO FdoGlobal = NULL;
-
 NTSTATUS
 FdoCreate(
     IN  PDEVICE_OBJECT  PhysicalDeviceObject
@@ -2368,16 +2367,21 @@ FdoCreate(
 
     KeInitializeSpinLock(&Fdo->EvtchnLock);
     InitializeListHead(&Fdo->EvtchnList);
-    ASSERT(FdoGlobal == NULL);
-    FdoGlobal = Fdo;
-    status = PsSetCreateProcessNotifyRoutine(XenifaceProcessNotify, FALSE);
+
+    KeInitializeSpinLock(&Fdo->IrpQueueLock);
+    InitializeListHead(&Fdo->IrpList);
+
+    KeInitializeSpinLock(&Fdo->GnttabCacheLock);
+
+    status = IoCsqInitialize(&Fdo->IrpQueue,
+                             CsqInsertIrp,
+                             CsqRemoveIrp,
+                             CsqPeekNextIrp,
+                             CsqAcquireLock,
+                             CsqReleaseLock,
+                             CsqCompleteCanceledIrp);
     if (!NT_SUCCESS(status))
         goto fail14;
-
-    KeInitializeSpinLock(&Fdo->GnttabGrantLock);
-    InitializeListHead(&Fdo->GnttabGrantList);
-    KeInitializeSpinLock(&Fdo->GnttabMapLock);
-    InitializeListHead(&Fdo->GnttabMapList);
 
     Info("%p (%s)\n",
          FunctionDeviceObject,
@@ -2497,15 +2501,12 @@ FdoDestroy(
 
     Dx->Fdo = NULL;
 
-    ASSERT(IsListEmpty(&Fdo->GnttabGrantList));
-    RtlZeroMemory(&Fdo->GnttabGrantList, sizeof(LIST_ENTRY));
-    RtlZeroMemory(&Fdo->GnttabGrantLock, sizeof(KSPIN_LOCK));
-    ASSERT(IsListEmpty(&Fdo->GnttabMapList));
-    RtlZeroMemory(&Fdo->GnttabMapList, sizeof(LIST_ENTRY));
-    RtlZeroMemory(&Fdo->GnttabMapLock, sizeof(KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->GnttabCacheLock, sizeof(KSPIN_LOCK));
+    ASSERT(IsListEmpty(&Fdo->IrpList));
+    RtlZeroMemory(&Fdo->IrpList, sizeof(LIST_ENTRY));
+    RtlZeroMemory(&Fdo->IrpQueueLock, sizeof(KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->IrpQueue, sizeof(IO_CSQ));
 
-    ASSERT(NT_SUCCESS(PsSetCreateProcessNotifyRoutine(XenifaceProcessNotify, TRUE)));
-    FdoGlobal = NULL;
     ASSERT(IsListEmpty(&Fdo->EvtchnList));
     RtlZeroMemory(&Fdo->EvtchnList, sizeof(LIST_ENTRY));
     RtlZeroMemory(&Fdo->EvtchnLock, sizeof(KSPIN_LOCK));

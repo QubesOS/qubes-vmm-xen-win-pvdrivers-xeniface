@@ -35,50 +35,61 @@
 #define XENIFACE_KERNEL_MODE
 #include "xeniface_ioctls.h"
 
+typedef enum _XENIFACE_CONTEXT_TYPE {
+    XENIFACE_CONTEXT_GRANT,
+    XENIFACE_CONTEXT_MAP
+} XENIFACE_CONTEXT_TYPE;
+
+typedef struct _XENIFACE_CONTEXT_ID {
+    XENIFACE_CONTEXT_TYPE  Type;
+    ULONG                  RequestId;
+    PEPROCESS              Process;
+} XENIFACE_CONTEXT_ID, *PXENIFACE_CONTEXT_ID;
+
 typedef struct _XENIFACE_STORE_CONTEXT {
-    LIST_ENTRY Entry;
-    PXENBUS_STORE_WATCH Watch;
-    PKEVENT Event;
-    PEPROCESS Process;
+    LIST_ENTRY             Entry;
+    PXENBUS_STORE_WATCH    Watch;
+    PKEVENT                Event;
+    PVOID                  FileObject;
 } XENIFACE_STORE_CONTEXT, *PXENIFACE_STORE_CONTEXT;
 
 typedef struct _XENIFACE_EVTCHN_CONTEXT {
-    LIST_ENTRY Entry;
+    LIST_ENTRY             Entry;
     PXENBUS_EVTCHN_CHANNEL Channel;
-    ULONG LocalPort;
-    PKEVENT Event;
-    PEPROCESS Process;
-    KDPC Dpc;
-    PXENIFACE_FDO Fdo;
-    BOOLEAN Active;
+    ULONG                  LocalPort;
+    PKEVENT                Event;
+    KDPC                   Dpc;
+    PXENIFACE_FDO          Fdo;
+    BOOLEAN                Active;
+    PVOID                  FileObject;
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 
 typedef struct _XENIFACE_GRANT_CONTEXT {
-    LIST_ENTRY Entry;
-    PXENBUS_GNTTAB_ENTRY *Grants;
-    PEPROCESS Process;
-    USHORT RemoteDomain;
-    ULONG NumberPages;
+    XENIFACE_CONTEXT_ID      Id;
+    LIST_ENTRY               Entry;
+    PXENBUS_GNTTAB_ENTRY     *Grants;
+    USHORT                   RemoteDomain;
+    ULONG                    NumberPages;
     GNTTAB_GRANT_PAGES_FLAGS Flags;
-    ULONG NotifyOffset;
-    ULONG NotifyPort;
-    PVOID KernelVa;
-    PVOID UserVa;
-    PMDL Mdl;
+    ULONG                    NotifyOffset;
+    ULONG                    NotifyPort;
+    PVOID                    KernelVa;
+    PVOID                    UserVa;
+    PMDL                     Mdl;
 } XENIFACE_GRANT_CONTEXT, *PXENIFACE_GRANT_CONTEXT;
 
 typedef struct _XENIFACE_MAP_CONTEXT {
-    LIST_ENTRY Entry;
-    PEPROCESS Process;
-    USHORT RemoteDomain;
-    ULONG NumberPages;
+    XENIFACE_CONTEXT_ID      Id;
+    LIST_ENTRY               Entry;
+    USHORT                   RemoteDomain;
+    ULONG                    NumberPages;
     GNTTAB_GRANT_PAGES_FLAGS Flags;
-    ULONG NotifyOffset;
-    ULONG NotifyPort;
-    PHYSICAL_ADDRESS Address;
-    PVOID KernelVa;
-    PVOID UserVa;
-    PMDL Mdl;
+    ULONG                    NotifyOffset;
+    ULONG                    NotifyPort;
+    PHYSICAL_ADDRESS         Address;
+    PVOID                    KernelVa;
+    PVOID                    UserVa;
+    PMDL                     Mdl;
 } XENIFACE_MAP_CONTEXT, *PXENIFACE_MAP_CONTEXT;
 
 NTSTATUS
@@ -87,32 +98,34 @@ XenIFaceIoctl(
     __in  PIRP              Irp
     );
 
+_IRQL_requires_max_(APC_LEVEL)
 VOID
-XenifaceProcessNotify(
-    __in HANDLE ParentId,
-    __in HANDLE ProcessId,
-    __in BOOLEAN Create
+XenIfaceCleanup(
+    PXENIFACE_FDO Fdo,
+    PFILE_OBJECT  FileObject
     );
 
-__drv_requiresIRQL(DISPATCH_LEVEL)
+_IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
     __in PVOID Argument
     );
 
-__drv_requiresIRQL(DISPATCH_LEVEL)
+_IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
     __in PVOID Argument
     );
 
-NTSTATUS
+_IRQL_requires_max_(APC_LEVEL)
+VOID
 GnttabFreeGrant(
     __in PXENIFACE_FDO Fdo,
     __in PXENIFACE_GRANT_CONTEXT Context
     );
 
-NTSTATUS
+_IRQL_requires_max_(APC_LEVEL)
+VOID
 GnttabFreeMap(
     __in PXENIFACE_FDO Fdo,
     __in PXENIFACE_MAP_CONTEXT Context

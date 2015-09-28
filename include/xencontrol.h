@@ -89,7 +89,6 @@ DWORD GnttabGrantPages(
     IN  ULONG notifyOffset,
     IN  ULONG notifyPort,
     IN  GNTTAB_GRANT_PAGES_FLAGS flags,
-    OUT PVOID *handle,
     OUT PVOID *address,
     OUT ULONG *references
     );
@@ -97,7 +96,7 @@ DWORD GnttabGrantPages(
 XENCONTROL_API
 DWORD GnttabUngrantPages(
     IN  HANDLE iface,
-    IN  PVOID handle
+    IN  PVOID address
     );
 
 XENCONTROL_API
@@ -109,14 +108,13 @@ DWORD GnttabMapForeignPages(
     IN  ULONG notifyOffset,
     IN  ULONG notifyPort,
     IN  GNTTAB_GRANT_PAGES_FLAGS flags,
-    OUT PVOID *handle,
     OUT PVOID *address
     );
 
 XENCONTROL_API
 DWORD GnttabUnmapForeignPages(
     IN  HANDLE iface,
-    IN  PVOID handle
+    IN  PVOID address
     );
 
 XENCONTROL_API
