@@ -60,7 +60,7 @@ DllMain(
 }
 
 void
-XenifaceSetLogLevel(
+XencontrolSetLogLevel(
     IN  XENCONTROL_LOG_LEVEL LogLevel
     )
 {
@@ -916,7 +916,7 @@ StoreSetPermissions(
     FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S', count: %lu", Path, Count);
-    for (int i = 0; i < Count; i++)
+    for (ULONG i = 0; i < Count; i++)
         Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", Permissions[i].Domain, Permissions[i].Mask);
 
     Size = sizeof(STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);

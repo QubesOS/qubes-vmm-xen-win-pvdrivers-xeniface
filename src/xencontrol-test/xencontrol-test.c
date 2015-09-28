@@ -203,7 +203,7 @@ DWORD StoreRemoteRead(HANDLE xif, ULONG serverPid, USHORT remoteDomain, USHORT l
     return ERROR_SUCCESS;
 }
 
-void XifLogger(XENIFACE_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list args)
+void XifLogger(XENCONTROL_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list args)
 {
     WCHAR buf[1024];
     StringCbVPrintf(buf, sizeof(buf), format, args);
@@ -238,10 +238,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
-    XenifaceRegisterLogger(XifLogger);
-    XenifaceSetLogLevel(XLL_DEBUG);
+    XencontrolRegisterLogger(XifLogger);
+    XencontrolSetLogLevel(XLL_DEBUG);
 
-    status = XenifaceOpen(&xif);
+    status = XencontrolOpen(&xif);
     if (status != ERROR_SUCCESS)
     {
         wprintf(L"[!] Error opening xen interface device: 0x%x\n", status);
