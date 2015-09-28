@@ -7,23 +7,18 @@
 #include "xencontrol.h"
 #include "xencontrol_private.h"
 
-static XencontrolLogger *g_Logger = NULL;
-static XENCONTROL_LOG_LEVEL g_LogLevel = XLL_INFO;
-static ULONG g_RequestId = 1;
-static LIST_ENTRY g_RequestList;
-static CRITICAL_SECTION g_RequestListLock;
-
 static PXENCONTROL_GNTTAB_REQUEST
 FindRequest(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
 {
     PLIST_ENTRY Entry;
     PXENCONTROL_GNTTAB_REQUEST ReturnRequest = NULL;
 
-    EnterCriticalSection(&g_RequestListLock);
-    Entry = g_RequestList.Flink;
-    while (Entry != &g_RequestList)
+    EnterCriticalSection(&Xc->RequestListLock);
+    Entry = Xc->RequestList.Flink;
+    while (Entry != &Xc->RequestList)
     {
         PXENCONTROL_GNTTAB_REQUEST Request = CONTAINING_RECORD(Entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
         if (Request->Address == Address)
@@ -34,7 +29,7 @@ FindRequest(
 
         Entry = Entry->Flink;
     }
-    LeaveCriticalSection(&g_RequestListLock);
+    LeaveCriticalSection(&Xc->RequestListLock);
 
     return ReturnRequest;
 }
@@ -46,30 +41,23 @@ DllMain(
     IN  LPVOID Reserved
 )
 {
-    switch (ReasonForCall)
-    {
-    case DLL_PROCESS_ATTACH:
-        InitializeCriticalSection(&g_RequestListLock);
-        InitializeListHead(&g_RequestList);
-        break;
-
-    case DLL_PROCESS_DETACH:
-        break;
-    }
     return TRUE;
 }
 
 void
 XencontrolSetLogLevel(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  XENCONTROL_LOG_LEVEL LogLevel
     )
 {
-    g_LogLevel = LogLevel;
+    Xc->LogLevel = LogLevel;
 }
 
 static void
 _Log(
+    IN  XencontrolLogger *Logger,
     IN  XENCONTROL_LOG_LEVEL LogLevel,
+    IN  XENCONTROL_LOG_LEVEL CurrentLogLevel,
     IN  PCHAR Function,
     IN  PWCHAR Format,
     ...
@@ -78,21 +66,22 @@ _Log(
     va_list Args;
     DWORD LastError;
 
-    if (!g_Logger)
+    if (!Logger)
         return;
 
-    if (LogLevel > g_LogLevel)
+    if (LogLevel > CurrentLogLevel)
         return;
 
     LastError = GetLastError();
     va_start(Args, Format);
-    g_Logger(LogLevel, Function, Format, Args);
+    Logger(LogLevel, Function, Format, Args);
     va_end(Args);
     SetLastError(LastError);
 }
 
 static void
 LogMultiSz(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Caller,
     IN  XENCONTROL_LOG_LEVEL Level,
     IN  PCHAR MultiSz
@@ -104,51 +93,65 @@ LogMultiSz(
     for (Ptr = MultiSz; *Ptr;)
     {
         Len = (ULONG)strlen(Ptr);
-        _Log(Level, Caller, L"%S", Ptr);
+        _Log(Xc->Logger, Level, Xc->LogLevel, Caller, L"%S", Ptr);
         Ptr += (Len + 1);
     }
 }
 
 void
 XencontrolRegisterLogger(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  XencontrolLogger *Logger
     )
 {
     FUNCTION_ENTER();
-    g_Logger = Logger;
+    Xc->Logger = Logger;
     FUNCTION_EXIT();
 }
 
 DWORD
 XencontrolOpen(
-    OUT HANDLE *Iface
+    IN  XencontrolLogger *Logger,
+    OUT PXENCONTROL_CONTEXT *Xc
     )
 {
     HDEVINFO DevInfo;
     SP_DEVICE_INTERFACE_DATA InterfaceData;
     SP_DEVICE_INTERFACE_DETAIL_DATA *DetailData = NULL;
     DWORD BufferSize;
+    PXENCONTROL_CONTEXT Context;
 
-    FUNCTION_ENTER();
+    Context = malloc(sizeof(*Context));
+    if (Context == NULL)
+        return ERROR_NOT_ENOUGH_MEMORY;
+
+    Context->Logger = Logger;
+    Context->LogLevel = XLL_INFO;
+    Context->RequestId = 1;
+    InitializeListHead(&Context->RequestList);
+    InitializeCriticalSection(&Context->RequestListLock);
 
     DevInfo = SetupDiGetClassDevs(&GUID_INTERFACE_XENIFACE, 0, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     if (DevInfo == INVALID_HANDLE_VALUE)
     {
-        Log(XLL_ERROR, L"XENIFACE device class doesn't exist");
+        _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+             L"XENIFACE device class doesn't exist");
         goto fail;
     }
 
     InterfaceData.cbSize = sizeof(InterfaceData);
     if (!SetupDiEnumDeviceInterfaces(DevInfo, NULL, &GUID_INTERFACE_XENIFACE, 0, &InterfaceData))
     {
-        Log(XLL_ERROR, L"Failed to enumerate XENIFACE devices");
+        _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+             L"Failed to enumerate XENIFACE devices");
         goto fail;
     }
 
     SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, NULL, 0, &BufferSize, NULL);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
     {
-        Log(XLL_ERROR, L"Failed to get buffer size for device details");
+        _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+             L"Failed to get buffer size for device details");
         goto fail;
     }
 
@@ -166,50 +169,55 @@ XencontrolOpen(
 
     if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, DetailData, BufferSize, NULL, NULL))
     {
-        Log(XLL_ERROR, L"Failed to get XENIFACE device path");
+        _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+             L"Failed to get XENIFACE device path");
         goto fail;
     }
 
-    *Iface = CreateFile(DetailData->DevicePath,
-                        FILE_GENERIC_READ | FILE_GENERIC_WRITE,
-                        0,
-                        NULL,
-                        OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                        NULL);
+    Context->XenIface = CreateFile(DetailData->DevicePath,
+                                   FILE_GENERIC_READ | FILE_GENERIC_WRITE,
+                                   0,
+                                   NULL,
+                                   OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                                   NULL);
 
-    if (*Iface == INVALID_HANDLE_VALUE)
+    if (Context->XenIface == INVALID_HANDLE_VALUE)
     {
-        Log(XLL_ERROR, L"Failed to open XENIFACE device, path: %s", DetailData->DevicePath);
+        _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+             L"Failed to open XENIFACE device, path: %s", DetailData->DevicePath);
         goto fail;
     }
 
-    Log(XLL_DEBUG, L"Device handle: 0x%x", *Iface);
+    _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+         L"XenIface handle: 0x%x", Context->XenIface);
 
     free(DetailData);
-    FUNCTION_EXIT();
+    *Xc = Context;
     return ERROR_SUCCESS;
 
 fail:
-    Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
+    _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+         L"Error: %d 0x%x", GetLastError(), GetLastError());
     free(DetailData);
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
 void
 XencontrolClose(
-    IN  HANDLE Iface
+    IN  PXENCONTROL_CONTEXT Xc
     )
 {
     FUNCTION_ENTER();
-    CloseHandle(Iface);
+    CloseHandle(Xc->XenIface);
+    DeleteCriticalSection(&Xc->RequestListLock);
     FUNCTION_EXIT();
+    free(Xc);
 }
 
 DWORD
 EvtchnBindUnboundPort(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  HANDLE Event,
     IN  BOOL Mask,
@@ -228,7 +236,7 @@ EvtchnBindUnboundPort(
     In.Mask = !!Mask;
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, Event: 0x%x, Mask: %d", RemoteDomain, Event, Mask);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT,
                               &In, sizeof(In),
                               &Out, sizeof(Out),
@@ -255,7 +263,7 @@ fail:
 
 DWORD
 EvtchnBindInterdomain(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG RemotePort,
     IN  HANDLE Event,
@@ -277,7 +285,7 @@ EvtchnBindInterdomain(
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, RemotePort %d, Event: 0x%x, Mask: %d",
         RemoteDomain, RemotePort, Event, Mask);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN,
                               &In, sizeof(In),
                               &Out, sizeof(Out),
@@ -304,7 +312,7 @@ fail:
 
 DWORD
 EvtchnClose(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
 {
@@ -317,7 +325,7 @@ EvtchnClose(
     In.LocalPort = LocalPort;
 
     Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_EVTCHN_CLOSE,
                               &In, sizeof(In),
                               NULL, 0,
@@ -341,7 +349,7 @@ fail:
 
 DWORD
 EvtchnNotify(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
 {
@@ -354,7 +362,7 @@ EvtchnNotify(
     In.LocalPort = LocalPort;
 
     Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_EVTCHN_NOTIFY,
                               &In, sizeof(In),
                               NULL, 0,
@@ -378,7 +386,7 @@ fail:
 
 DWORD
 EvtchnUnmask(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
 {
@@ -391,7 +399,7 @@ EvtchnUnmask(
     In.LocalPort = LocalPort;
 
     Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_EVTCHN_UNMASK,
                               &In, sizeof(In),
                               NULL, 0,
@@ -415,7 +423,7 @@ fail:
 
 DWORD
 GnttabGrantPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  ULONG NotifyOffset,
@@ -435,7 +443,7 @@ GnttabGrantPages(
 
     FUNCTION_ENTER();
 
-    In1.RequestId = g_RequestId;
+    In1.RequestId = Xc->RequestId;
     In1.RemoteDomain = RemoteDomain;
     In1.NumberPages = NumberPages;
     In1.NotifyOffset = NotifyOffset;
@@ -457,7 +465,7 @@ GnttabGrantPages(
     Log(XLL_DEBUG, L"Id %lu, RemoteDomain: %d, NumberPages: %lu, NotifyOffset: 0x%x, NotifyPort: %lu, Flags: 0x%x",
         In1.RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_GRANT_PAGES,
                               &In1, sizeof(In1),
                               NULL, 0,
@@ -483,7 +491,7 @@ GnttabGrantPages(
 
     // get actual result
     In2.RequestId = In1.RequestId;
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_GET_GRANTS,
                               &In2, sizeof(In2),
                               Out2, Size,
@@ -499,10 +507,10 @@ GnttabGrantPages(
     }
 
     Request->Address = Out2->Address;
-    EnterCriticalSection(&g_RequestListLock);
-    InsertTailList(&g_RequestList, &Request->ListEntry);
-    g_RequestId++; // FIXME: synchronization
-    LeaveCriticalSection(&g_RequestListLock);
+    EnterCriticalSection(&Xc->RequestListLock);
+    InsertTailList(&Xc->RequestList, &Request->ListEntry);
+    Xc->RequestId++; // FIXME: synchronization
+    LeaveCriticalSection(&Xc->RequestListLock);
 
     *Address = Out2->Address;
     memcpy(References, &Out2->References, NumberPages * sizeof(ULONG));
@@ -524,7 +532,7 @@ fail:
 
 DWORD
 GnttabUngrantPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
 {
@@ -539,7 +547,7 @@ GnttabUngrantPages(
     Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
     Status = ERROR_NOT_FOUND;
-    Request = FindRequest(Address);
+    Request = FindRequest(Xc, Address);
     if (!Request)
     {
         Log(XLL_ERROR, L"Address %p not granted", Address);
@@ -548,7 +556,7 @@ GnttabUngrantPages(
 
     In.RequestId = Request->Id;
 
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES,
                               &In, sizeof(In),
                               NULL, 0,
@@ -562,9 +570,9 @@ GnttabUngrantPages(
         goto fail;
     }
 
-    EnterCriticalSection(&g_RequestListLock);
+    EnterCriticalSection(&Xc->RequestListLock);
     RemoveEntryList(&Request->ListEntry);
-    LeaveCriticalSection(&g_RequestListLock);
+    LeaveCriticalSection(&Xc->RequestListLock);
     free(Request);
 
     FUNCTION_EXIT();
@@ -578,7 +586,7 @@ fail:
 
 DWORD
 GnttabMapForeignPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  PULONG References,
@@ -605,7 +613,7 @@ GnttabMapForeignPages(
     if (!In1 || !Request)
         goto fail;
 
-    In1->RequestId = g_RequestId;
+    In1->RequestId = Xc->RequestId;
     In1->RemoteDomain = RemoteDomain;
     In1->NumberPages = NumberPages;
     In1->NotifyOffset = NotifyOffset;
@@ -623,7 +631,7 @@ GnttabMapForeignPages(
     for (ULONG i = 0; i < NumberPages; i++)
         Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, References[i]);
 
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES,
                               In1, Size,
                               NULL, 0,
@@ -649,7 +657,7 @@ GnttabMapForeignPages(
 
     // get actual result
     In2.RequestId = In1->RequestId;
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_GET_MAP,
                               &In2, sizeof(In2),
                               &Out2, sizeof(Out2),
@@ -665,10 +673,10 @@ GnttabMapForeignPages(
     }
 
     Request->Address = Out2.Address;
-    EnterCriticalSection(&g_RequestListLock);
-    InsertTailList(&g_RequestList, &Request->ListEntry);
-    g_RequestId++; // FIXME: synchronization
-    LeaveCriticalSection(&g_RequestListLock);
+    EnterCriticalSection(&Xc->RequestListLock);
+    InsertTailList(&Xc->RequestList, &Request->ListEntry);
+    Xc->RequestId++; // FIXME: synchronization
+    LeaveCriticalSection(&Xc->RequestListLock);
 
     *Address = Out2.Address;
 
@@ -688,7 +696,7 @@ fail:
 
 DWORD
 GnttabUnmapForeignPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
 {
@@ -703,7 +711,7 @@ GnttabUnmapForeignPages(
     Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
     Status = ERROR_NOT_FOUND;
-    Request = FindRequest(Address);
+    Request = FindRequest(Xc, Address);
     if (!Request)
     {
         Log(XLL_ERROR, L"Address %p not mapped", Address);
@@ -712,7 +720,7 @@ GnttabUnmapForeignPages(
 
     In.RequestId = Request->Id;
 
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES,
                               &In, sizeof(In),
                               NULL, 0,
@@ -726,9 +734,9 @@ GnttabUnmapForeignPages(
         goto fail;
     }
 
-    EnterCriticalSection(&g_RequestListLock);
+    EnterCriticalSection(&Xc->RequestListLock);
     RemoveEntryList(&Request->ListEntry);
-    LeaveCriticalSection(&g_RequestListLock);
+    LeaveCriticalSection(&Xc->RequestListLock);
     free(Request);
 
     FUNCTION_EXIT();
@@ -742,7 +750,7 @@ fail:
 
 DWORD
 StoreRead(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
     OUT CHAR *Output
@@ -754,7 +762,7 @@ StoreRead(
     FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_READ,
                               Path, (DWORD)strlen(Path) + 1,
                               Output, cbOutput,
@@ -780,7 +788,7 @@ fail:
 
 DWORD
 StoreWrite(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  PCHAR Value
     )
@@ -805,7 +813,7 @@ StoreWrite(
     memcpy(Buffer + strlen(Path) + 1, Value, strlen(Value));
 
     Log(XLL_DEBUG, L"Path: '%S', Value: '%S'", Path, Value);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_WRITE,
                               Buffer, cbBuffer,
                               NULL, 0,
@@ -831,7 +839,7 @@ fail:
 
 DWORD
 StoreDirectory(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
     OUT CHAR *Output
@@ -843,7 +851,7 @@ StoreDirectory(
     FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_DIRECTORY,
                               Path, (DWORD)strlen(Path) + 1,
                               Output, cbOutput,
@@ -856,7 +864,7 @@ StoreDirectory(
         goto fail;
     }
 
-    LogMultiSz(__FUNCTION__, XLL_DEBUG, Output);
+    LogMultiSz(Xc, __FUNCTION__, XLL_DEBUG, Output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -869,7 +877,7 @@ fail:
 
 DWORD
 StoreRemove(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path
     )
 {
@@ -879,7 +887,7 @@ StoreRemove(
     FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_REMOVE,
                               Path, (DWORD)strlen(Path) + 1,
                               NULL, 0,
@@ -903,7 +911,7 @@ fail:
 
 DWORD
 StoreSetPermissions(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
     IN  PXENBUS_STORE_PERMISSION Permissions
@@ -932,7 +940,7 @@ StoreSetPermissions(
     In->NumberPermissions = Count;
     memcpy(&In->Permissions, Permissions, Count * sizeof(XENBUS_STORE_PERMISSION));
 
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_SET_PERMISSIONS,
                               In, Size,
                               NULL, 0,
@@ -958,7 +966,7 @@ fail:
 
 DWORD
 StoreAddWatch(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  HANDLE Event,
     OUT PVOID *Handle
@@ -976,7 +984,7 @@ StoreAddWatch(
     In.Path = Path;
     In.PathLength = (DWORD)strlen(Path) + 1;
     In.Event = Event;
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_ADD_WATCH,
                               &In, sizeof(In),
                               &Out, sizeof(Out),
@@ -1004,7 +1012,7 @@ fail:
 
 DWORD
 StoreRemoveWatch(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Handle
     )
 {
@@ -1017,7 +1025,7 @@ StoreRemoveWatch(
     Log(XLL_DEBUG, L"Handle: %p", Handle);
 
     In.Context = Handle;
-    Success = DeviceIoControl(Iface,
+    Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_REMOVE_WATCH,
                               &In, sizeof(In),
                               NULL, 0,

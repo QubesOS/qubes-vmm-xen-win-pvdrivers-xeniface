@@ -15,6 +15,9 @@
 extern "C" {
 #endif
 
+struct _XENCONTROL_CONTEXT;
+typedef struct _XENCONTROL_CONTEXT *PXENCONTROL_CONTEXT;
+
 typedef enum _XENCONTROL_LOG_LEVEL {
     XLL_ERROR = 1,
     XLL_WARNING,
@@ -34,31 +37,34 @@ XencontrolLogger(
 XENCONTROL_API
 void
 XencontrolRegisterLogger(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  XencontrolLogger *Logger
     );
 
 XENCONTROL_API
 void
 XencontrolSetLogLevel(
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  XENCONTROL_LOG_LEVEL LogLevel
     );
 
 XENCONTROL_API
 DWORD
 XencontrolOpen(
-    OUT HANDLE *Iface
+    IN  XencontrolLogger *Logger,
+    OUT PXENCONTROL_CONTEXT *Xc
     );
 
 XENCONTROL_API
 void
 XencontrolClose(
-    IN  HANDLE Iface
+    IN  PXENCONTROL_CONTEXT Xc
     );
 
 XENCONTROL_API
 DWORD
 EvtchnBindUnboundPort(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  HANDLE Event,
     IN  BOOL Mask,
@@ -68,7 +74,7 @@ EvtchnBindUnboundPort(
 XENCONTROL_API
 DWORD
 EvtchnBindInterdomain(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG RemotePort,
     IN  HANDLE Event,
@@ -79,28 +85,28 @@ EvtchnBindInterdomain(
 XENCONTROL_API
 DWORD
 EvtchnClose(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
 EvtchnNotify(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
 EvtchnUnmask(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
 GnttabGrantPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  ULONG NotifyOffset,
@@ -113,14 +119,14 @@ GnttabGrantPages(
 XENCONTROL_API
 DWORD
 GnttabUngrantPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );
 
 XENCONTROL_API
 DWORD
 GnttabMapForeignPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  PULONG References,
@@ -133,14 +139,14 @@ GnttabMapForeignPages(
 XENCONTROL_API
 DWORD
 GnttabUnmapForeignPages(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );
 
 XENCONTROL_API
 DWORD
 StoreRead(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
     OUT CHAR *Output
@@ -149,7 +155,7 @@ StoreRead(
 XENCONTROL_API
 DWORD
 StoreWrite(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  PCHAR Value
     );
@@ -157,7 +163,7 @@ StoreWrite(
 XENCONTROL_API
 DWORD
 StoreDirectory(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
     OUT CHAR *Output
@@ -166,14 +172,14 @@ StoreDirectory(
 XENCONTROL_API
 DWORD
 StoreRemove(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path
     );
 
 XENCONTROL_API
 DWORD
 StoreSetPermissions(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
     IN  PXENBUS_STORE_PERMISSION Permissions
@@ -182,7 +188,7 @@ StoreSetPermissions(
 XENCONTROL_API
 DWORD
 StoreAddWatch(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  HANDLE Event,
     OUT PVOID *Handle
@@ -191,7 +197,7 @@ StoreAddWatch(
 XENCONTROL_API
 DWORD
 StoreRemoveWatch(
-    IN  HANDLE Iface,
+    IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Handle
     );
 

@@ -5,11 +5,11 @@
 #include "xencontrol.h"
 
 #define Log(level, format, ...) \
-        _Log(level, __FUNCTION__, format, __VA_ARGS__)
+        _Log(Xc->Logger, level, Xc->LogLevel, __FUNCTION__, format, __VA_ARGS__)
 
 #if defined (_DEBUG)
-#   define FUNCTION_ENTER() _Log(XLL_TRACE, __FUNCTION__, L"-->")
-#   define FUNCTION_EXIT() _Log(XLL_TRACE, __FUNCTION__, L"<--")
+#   define FUNCTION_ENTER() _Log(Xc->Logger, XLL_TRACE, Xc->LogLevel, __FUNCTION__, L"-->")
+#   define FUNCTION_EXIT() _Log(Xc->Logger, XLL_TRACE, Xc->LogLevel, __FUNCTION__, L"<--")
 #else
 #   define FUNCTION_ENTER()
 #   define FUNCTION_EXIT()
@@ -37,6 +37,15 @@
     _EX_Blink->Flink = _EX_Flink; \
     _EX_Flink->Blink = _EX_Blink; \
     }
+
+typedef struct _XENCONTROL_CONTEXT {
+    HANDLE XenIface;
+    XencontrolLogger *Logger;
+    XENCONTROL_LOG_LEVEL LogLevel;
+    ULONG RequestId;
+    LIST_ENTRY RequestList;
+    CRITICAL_SECTION RequestListLock;
+} XENCONTROL_CONTEXT, *PXENCONTROL_CONTEXT;
 
 typedef struct _XENCONTROL_GNTTAB_REQUEST {
     LIST_ENTRY  ListEntry;
