@@ -111,22 +111,22 @@ DWORD StoreTest(IN PXENCONTROL_CONTEXT xc, IN ULONG serverPid, IN USHORT remoteD
     DWORD pid = GetCurrentProcessId();
 
     StringCbPrintfA(path, sizeof(path), "name");
-    status = StoreRead(xc, path, sizeof(value), value);
+    status = XcStoreRead(xc, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
+    wprintf(L"[*] XcStoreRead(%S): '%S'\n", path, value);
 
     StringCbPrintfA(path, sizeof(path), "domid");
-    status = StoreRead(xc, path, sizeof(value), value);
+    status = XcStoreRead(xc, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
+    wprintf(L"[*] XcStoreRead(%S): '%S'\n", path, value);
     *localDomain = (USHORT)atoi(value);
 
     perms[0].Domain = *localDomain; // our domain
@@ -136,49 +136,49 @@ DWORD StoreTest(IN PXENCONTROL_CONTEXT xc, IN ULONG serverPid, IN USHORT remoteD
 
     StringCbPrintfA(path, sizeof(path), "xiftest-%d", pid);
     StringCbPrintfA(value, sizeof(value), "this is a test");
-    wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
-    status = StoreWrite(xc, path, value);
+    wprintf(L"[*] calling XcStoreWrite(%S, %S)\n", path, value);
+    status = XcStoreWrite(xc, path, value);
     if (status != ERROR_SUCCESS) // this is expected
-        wprintf(L"[*] StoreWrite(%S, %S) failed: 0x%x (this is expected)\n", path, value, status);
+        wprintf(L"[*] XcStoreWrite(%S, %S) failed: 0x%x (this is expected)\n", path, value, status);
 
     StringCbPrintfA(path, sizeof(path), "data/xiftest-%d", pid);
-    wprintf(L"[*] calling StoreWrite(%S, %S)\n", path, value);
-    status = StoreWrite(xc, path, value);
+    wprintf(L"[*] calling XcStoreWrite(%S, %S)\n", path, value);
+    status = XcStoreWrite(xc, path, value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
+        wprintf(L"[!] XcStoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
         return status;
     }
 
-    status = StoreRead(xc, path, sizeof(value), value);
+    status = XcStoreRead(xc, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
+    wprintf(L"[*] XcStoreRead(%S): '%S'\n", path, value);
 
-    status = StoreRemove(xc, path);
+    status = XcStoreRemove(xc, path);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRemove(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreRemove(%S) failed: 0x%x\n", path, status);
         return status;
     }
-    wprintf(L"[*] StoreRemove(%S) ok\n", path);
+    wprintf(L"[*] XcStoreRemove(%S) ok\n", path);
 
     // create a key readable by the peer domain
     StringCbPrintfA(path, sizeof(path), "data/xiftest-%d/%d", serverPid, remoteDomain);
     StringCbPrintfA(value, sizeof(value), "xif test %d", pid);
-    status = StoreWrite(xc, path, value);
+    status = XcStoreWrite(xc, path, value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
+        wprintf(L"[!] XcStoreWrite(%S, %S) failed: 0x%x\n", path, value, status);
         return status;
     }
-    status = StoreSetPermissions(xc, path, 2, perms);
+    status = XcStoreSetPermissions(xc, path, 2, perms);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreSetPermissions(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreSetPermissions(%S) failed: 0x%x\n", path, status);
         return status;
     }
 
@@ -192,18 +192,18 @@ DWORD StoreRemoteRead(PXENCONTROL_CONTEXT xc, ULONG serverPid, USHORT remoteDoma
     DWORD status;
 
     StringCbPrintfA(path, sizeof(path), "/local/domain/%d/data/xiftest-%d/%d", remoteDomain, serverPid, localDomain);
-    status = StoreRead(xc, path, sizeof(value), value);
+    status = XcStoreRead(xc, path, sizeof(value), value);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRead(%S) failed: 0x%x\n", path, status);
+        wprintf(L"[!] XcStoreRead(%S) failed: 0x%x\n", path, status);
         return status;
     }
 
-    wprintf(L"[*] StoreRead(%S): '%S'\n", path, value);
+    wprintf(L"[*] XcStoreRead(%S): '%S'\n", path, value);
     return ERROR_SUCCESS;
 }
 
-void XifLogger(XENCONTROL_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list args)
+void XcLogger(XENCONTROL_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list args)
 {
     WCHAR buf[1024];
     StringCbVPrintf(buf, sizeof(buf), format, args);
@@ -238,14 +238,14 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
-    status = XencontrolOpen(XifLogger, &xc);
+    status = XcOpen(XcLogger, &xc);
     if (status != ERROR_SUCCESS)
     {
         wprintf(L"[!] Error opening xen interface device: 0x%x\n", status);
         return 1;
     }
 
-    XencontrolSetLogLevel(xc, XLL_DEBUG);
+    XcSetLogLevel(xc, XLL_DEBUG);
 
     ctx.MsgEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (!ctx.MsgEvent)
@@ -285,26 +285,26 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             return 1;
         }
 
-        status = EvtchnBindUnboundPort(xc, ctx.RemoteDomain, ctx.MsgEvent, FALSE, &localPort);
+        status = XcEvtchnBindUnbound(xc, ctx.RemoteDomain, ctx.MsgEvent, FALSE, &localPort);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] EvtchnBindUnboundPort(%u) failed: 0x%x\n", ctx.RemoteDomain, status);
+            wprintf(L"[!] XcEvtchnBindUnbound(%u) failed: 0x%x\n", ctx.RemoteDomain, status);
             return 1;
         }
 
         wprintf(L"[*] local event port: %lu\n", localPort);
         wprintf(L"[*] granting %lu pages to remote domain %u\n", numPages, ctx.RemoteDomain);
-        status = GnttabGrantPages(xc,
-                                  ctx.RemoteDomain,
-                                  numPages,
-                                  FIELD_OFFSET(SHARED_MEM, ServerFlag),
-                                  localPort,
-                                  GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
-                                  &shm,
-                                  refs);
+        status = XcGnttabGrantAccess(xc,
+                                     ctx.RemoteDomain,
+                                     numPages,
+                                     FIELD_OFFSET(SHARED_MEM, ServerFlag),
+                                     localPort,
+                                     GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
+                                     &shm,
+                                     refs);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabGrantPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabGrantAccess failed: 0x%x\n", status);
             return 1;
         }
 
@@ -328,10 +328,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         // setup xenstore watch
         StringCbPrintfA(storePath, sizeof(storePath), "/local/domain/%d/data/xiftest-%d/%d", ctx.RemoteDomain, pid, ctx.LocalDomain);
         wprintf(L"[*] Adding xenstore watch on '%S'\n", storePath);
-        status = StoreAddWatch(xc, storePath, ctx.StoreEvent, &watchHandle);
+        status = XcStoreAddWatch(xc, storePath, ctx.StoreEvent, &watchHandle);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] StoreAddWatch failed: 0x%x\n", status);
+            wprintf(L"[!] XcStoreAddWatch failed: 0x%x\n", status);
             return 1;
         }
 
@@ -343,7 +343,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         {
             // write to the shared key
             StringCbPrintfA(msg, sizeof(msg), "XIFTEST %lu", i);
-            StoreWrite(xc, storePath, msg); // this should cause peer's xenstore watch to fire
+            XcStoreWrite(xc, storePath, msg); // this should cause peer's xenstore watch to fire
             // fill shared memory with random data
             for (ULONG j = 0; j < DATA_SIZE(numPages); j++)
                 DATA_PTR(shm)[j] = rand() % 256;
@@ -352,7 +352,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             ReadShm(shm);
             Sleep(rand() % 1000);
             // notify the client
-            EvtchnNotify(xc, localPort);
+            XcEvtchnNotify(xc, localPort);
             Sleep(rand() % 1000);
             if (ctx.Exit)
                 break;
@@ -360,10 +360,10 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ReadShm(shm);
 
         wprintf(L"[*] ungranting address %p\n", shm);
-        status = GnttabUngrantPages(xc, shm);
+        status = XcGnttabRevokeAccess(xc, shm);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabUngrantPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabRevokeAccess failed: 0x%x\n", status);
             return 1;
         }
     }
@@ -373,17 +373,17 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         refs[0] = _wtoi(argv[2]);
         wprintf(L"[*] performing initial one-page map: remote domain %d, ref %lu\n", ctx.RemoteDomain, refs[0]);
 
-        status = GnttabMapForeignPages(xc,
-                                       ctx.RemoteDomain,
-                                       1,
-                                       refs,
-                                       0,
-                                       0,
-                                       0,
-                                       &shm);
+        status = XcGnttabMap(xc,
+                             ctx.RemoteDomain,
+                             1,
+                             refs,
+                             0,
+                             0,
+                             0,
+                             &shm);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabMapForeignPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabMap failed: 0x%x\n", status);
             return 1;
         }
 
@@ -406,34 +406,34 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
         // bind event channel
         wprintf(L"[*] binding event channel: remote domain %d, remote port %lu\n", ctx.RemoteDomain, shm->EventPort);
-        status = EvtchnBindInterdomain(xc, ctx.RemoteDomain, shm->EventPort, ctx.MsgEvent, FALSE, &localPort);
+        status = XcEvtchnBindInterdomain(xc, ctx.RemoteDomain, shm->EventPort, ctx.MsgEvent, FALSE, &localPort);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] EvtchnBindInterdomain failed: 0x%x\n", status);
+            wprintf(L"[!] XcEvtchnBindInterdomain failed: 0x%x\n", status);
             return 1;
         }
         wprintf(L"[*] local event port: %lu, remapping the full region\n", localPort);
 
         // unmap
-        status = GnttabUnmapForeignPages(xc, shm);
+        status = XcGnttabUnmap(xc, shm);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabUnmapForeignPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabUnmap failed: 0x%x\n", status);
             return 1;
         }
 
         // map the full range with notifications
-        status = GnttabMapForeignPages(xc,
-                                       ctx.RemoteDomain,
-                                       numPages,
-                                       refs,
-                                       FIELD_OFFSET(SHARED_MEM, ClientFlag),
-                                       localPort,
-                                       GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
-                                       &shm);
+        status = XcGnttabMap(xc,
+                             ctx.RemoteDomain,
+                             numPages,
+                             refs,
+                             FIELD_OFFSET(SHARED_MEM, ClientFlag),
+                             localPort,
+                             GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
+                             &shm);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabMapForeignPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabMap failed: 0x%x\n", status);
             return 1;
         }
 
@@ -443,19 +443,19 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         // setup xenstore watch
         StringCbPrintfA(storePath, sizeof(storePath), "/local/domain/%d/data/xiftest-%d/%d", ctx.RemoteDomain, shm->ServerPid, ctx.LocalDomain);
         wprintf(L"[*] Adding xenstore watch on '%S'\n", storePath);
-        status = StoreAddWatch(xc, storePath, ctx.StoreEvent, &watchHandle);
+        status = XcStoreAddWatch(xc, storePath, ctx.StoreEvent, &watchHandle);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] StoreAddWatch failed: 0x%x\n", status);
+            wprintf(L"[!] XcStoreAddWatch failed: 0x%x\n", status);
             return 1;
         }
 
         // let the server know we're live
         shm->ClientFlag = 1;
-        status = EvtchnNotify(xc, localPort);
+        status = XcEvtchnNotify(xc, localPort);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] EvtchnNotify failed: 0x%x\n", status);
+            wprintf(L"[!] XcEvtchnNotify failed: 0x%x\n", status);
             return 1;
         }
 
@@ -467,7 +467,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         for (i = 0; i < 60; i++)
         {
             StringCbPrintfA(msg, sizeof(msg), "XIFTEST %lu", i);
-            StoreWrite(xc, storePath, msg); // this should cause peer's xenstore watch to fire
+            XcStoreWrite(xc, storePath, msg); // this should cause peer's xenstore watch to fire
             Sleep(rand() % 1000);
             if (ctx.Exit)
                 break;
@@ -476,25 +476,25 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
         // final unmap
         wprintf(L"[*] unmapping address %p\n", shm);;
-        status = GnttabUnmapForeignPages(xc, shm);
+        status = XcGnttabUnmap(xc, shm);
         if (status != ERROR_SUCCESS)
         {
-            wprintf(L"[!] GnttabUnmapForeignPages failed: 0x%x\n", status);
+            wprintf(L"[!] XcGnttabUnmap failed: 0x%x\n", status);
             return 1;
         }
     }
 
-    status = EvtchnClose(xc, localPort);
+    status = XcEvtchnClose(xc, localPort);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] EvtchnClose failed: 0x%x\n", status);
+        wprintf(L"[!] XcEvtchnClose failed: 0x%x\n", status);
         return 1;
     }
 
-    status = StoreRemoveWatch(xc, watchHandle);
+    status = XcStoreRemoveWatch(xc, watchHandle);
     if (status != ERROR_SUCCESS)
     {
-        wprintf(L"[!] StoreRemoveWatch failed: 0x%x\n", status);
+        wprintf(L"[!] XcStoreRemoveWatch failed: 0x%x\n", status);
         return 1;
     }
 

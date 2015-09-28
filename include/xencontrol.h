@@ -36,34 +36,34 @@ XencontrolLogger(
 
 XENCONTROL_API
 void
-XencontrolRegisterLogger(
+XcRegisterLogger(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  XencontrolLogger *Logger
     );
 
 XENCONTROL_API
 void
-XencontrolSetLogLevel(
+XcSetLogLevel(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  XENCONTROL_LOG_LEVEL LogLevel
     );
 
 XENCONTROL_API
 DWORD
-XencontrolOpen(
+XcOpen(
     IN  XencontrolLogger *Logger,
     OUT PXENCONTROL_CONTEXT *Xc
     );
 
 XENCONTROL_API
 void
-XencontrolClose(
+XcClose(
     IN  PXENCONTROL_CONTEXT Xc
     );
 
 XENCONTROL_API
 DWORD
-EvtchnBindUnboundPort(
+XcEvtchnBindUnbound(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  HANDLE Event,
@@ -73,7 +73,7 @@ EvtchnBindUnboundPort(
 
 XENCONTROL_API
 DWORD
-EvtchnBindInterdomain(
+XcEvtchnBindInterdomain(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG RemotePort,
@@ -84,28 +84,28 @@ EvtchnBindInterdomain(
 
 XENCONTROL_API
 DWORD
-EvtchnClose(
+XcEvtchnClose(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
-EvtchnNotify(
+XcEvtchnNotify(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
-EvtchnUnmask(
+XcEvtchnUnmask(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     );
 
 XENCONTROL_API
 DWORD
-GnttabGrantPages(
+XcGnttabGrantAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
@@ -118,14 +118,14 @@ GnttabGrantPages(
 
 XENCONTROL_API
 DWORD
-GnttabUngrantPages(
+XcGnttabRevokeAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );
 
 XENCONTROL_API
 DWORD
-GnttabMapForeignPages(
+XcGnttabMap(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
@@ -138,14 +138,14 @@ GnttabMapForeignPages(
 
 XENCONTROL_API
 DWORD
-GnttabUnmapForeignPages(
+XcGnttabUnmap(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );
 
 XENCONTROL_API
 DWORD
-StoreRead(
+XcStoreRead(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
@@ -154,7 +154,7 @@ StoreRead(
 
 XENCONTROL_API
 DWORD
-StoreWrite(
+XcStoreWrite(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  PCHAR Value
@@ -162,7 +162,7 @@ StoreWrite(
 
 XENCONTROL_API
 DWORD
-StoreDirectory(
+XcStoreDirectory(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
@@ -171,14 +171,14 @@ StoreDirectory(
 
 XENCONTROL_API
 DWORD
-StoreRemove(
+XcStoreRemove(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path
     );
 
 XENCONTROL_API
 DWORD
-StoreSetPermissions(
+XcStoreSetPermissions(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
@@ -187,7 +187,7 @@ StoreSetPermissions(
 
 XENCONTROL_API
 DWORD
-StoreAddWatch(
+XcStoreAddWatch(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  HANDLE Event,
@@ -196,7 +196,7 @@ StoreAddWatch(
 
 XENCONTROL_API
 DWORD
-StoreRemoveWatch(
+XcStoreRemoveWatch(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Handle
     );

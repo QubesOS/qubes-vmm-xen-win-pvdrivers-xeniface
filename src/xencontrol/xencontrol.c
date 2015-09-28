@@ -7,33 +7,6 @@
 #include "xencontrol.h"
 #include "xencontrol_private.h"
 
-static PXENCONTROL_GNTTAB_REQUEST
-FindRequest(
-    IN  PXENCONTROL_CONTEXT Xc,
-    IN  PVOID Address
-    )
-{
-    PLIST_ENTRY Entry;
-    PXENCONTROL_GNTTAB_REQUEST ReturnRequest = NULL;
-
-    EnterCriticalSection(&Xc->RequestListLock);
-    Entry = Xc->RequestList.Flink;
-    while (Entry != &Xc->RequestList)
-    {
-        PXENCONTROL_GNTTAB_REQUEST Request = CONTAINING_RECORD(Entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
-        if (Request->Address == Address)
-        {
-            ReturnRequest = Request;
-            break;
-        }
-
-        Entry = Entry->Flink;
-    }
-    LeaveCriticalSection(&Xc->RequestListLock);
-
-    return ReturnRequest;
-}
-
 BOOL APIENTRY
 DllMain(
     IN  HMODULE Module,
@@ -42,15 +15,6 @@ DllMain(
 )
 {
     return TRUE;
-}
-
-void
-XencontrolSetLogLevel(
-    IN  PXENCONTROL_CONTEXT Xc,
-    IN  XENCONTROL_LOG_LEVEL LogLevel
-    )
-{
-    Xc->LogLevel = LogLevel;
 }
 
 static void
@@ -80,7 +44,7 @@ _Log(
 }
 
 static void
-LogMultiSz(
+_LogMultiSz(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Caller,
     IN  XENCONTROL_LOG_LEVEL Level,
@@ -99,7 +63,7 @@ LogMultiSz(
 }
 
 void
-XencontrolRegisterLogger(
+XcRegisterLogger(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  XencontrolLogger *Logger
     )
@@ -109,8 +73,17 @@ XencontrolRegisterLogger(
     FUNCTION_EXIT();
 }
 
+void
+XcSetLogLevel(
+    IN  PXENCONTROL_CONTEXT Xc,
+    IN  XENCONTROL_LOG_LEVEL LogLevel
+    )
+{
+    Xc->LogLevel = LogLevel;
+}
+
 DWORD
-XencontrolOpen(
+XcOpen(
     IN  XencontrolLogger *Logger,
     OUT PXENCONTROL_CONTEXT *Xc
     )
@@ -204,7 +177,7 @@ fail:
 }
 
 void
-XencontrolClose(
+XcClose(
     IN  PXENCONTROL_CONTEXT Xc
     )
 {
@@ -216,7 +189,7 @@ XencontrolClose(
 }
 
 DWORD
-EvtchnBindUnboundPort(
+XcEvtchnBindUnbound(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  HANDLE Event,
@@ -262,7 +235,7 @@ fail:
 }
 
 DWORD
-EvtchnBindInterdomain(
+XcEvtchnBindInterdomain(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG RemotePort,
@@ -311,7 +284,7 @@ fail:
 }
 
 DWORD
-EvtchnClose(
+XcEvtchnClose(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
@@ -348,7 +321,7 @@ fail:
 }
 
 DWORD
-EvtchnNotify(
+XcEvtchnNotify(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
@@ -385,7 +358,7 @@ fail:
 }
 
 DWORD
-EvtchnUnmask(
+XcEvtchnUnmask(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  ULONG LocalPort
     )
@@ -421,8 +394,35 @@ fail:
     return GetLastError();
 }
 
+static PXENCONTROL_GNTTAB_REQUEST
+FindRequest(
+    IN  PXENCONTROL_CONTEXT Xc,
+    IN  PVOID Address
+    )
+{
+    PLIST_ENTRY Entry;
+    PXENCONTROL_GNTTAB_REQUEST ReturnRequest = NULL;
+
+    EnterCriticalSection(&Xc->RequestListLock);
+    Entry = Xc->RequestList.Flink;
+    while (Entry != &Xc->RequestList)
+    {
+        PXENCONTROL_GNTTAB_REQUEST Request = CONTAINING_RECORD(Entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
+        if (Request->Address == Address)
+        {
+            ReturnRequest = Request;
+            break;
+        }
+
+        Entry = Entry->Flink;
+    }
+    LeaveCriticalSection(&Xc->RequestListLock);
+
+    return ReturnRequest;
+}
+
 DWORD
-GnttabGrantPages(
+XcGnttabGrantAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
@@ -531,7 +531,7 @@ fail:
 }
 
 DWORD
-GnttabUngrantPages(
+XcGnttabRevokeAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
@@ -585,7 +585,7 @@ fail:
 }
 
 DWORD
-GnttabMapForeignPages(
+XcGnttabMap(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
@@ -695,7 +695,7 @@ fail:
 }
 
 DWORD
-GnttabUnmapForeignPages(
+XcGnttabUnmap(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
@@ -749,7 +749,7 @@ fail:
 }
 
 DWORD
-StoreRead(
+XcStoreRead(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
@@ -787,7 +787,7 @@ fail:
 }
 
 DWORD
-StoreWrite(
+XcStoreWrite(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  PCHAR Value
@@ -838,7 +838,7 @@ fail:
 }
 
 DWORD
-StoreDirectory(
+XcStoreDirectory(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  DWORD cbOutput,
@@ -864,7 +864,7 @@ StoreDirectory(
         goto fail;
     }
 
-    LogMultiSz(Xc, __FUNCTION__, XLL_DEBUG, Output);
+    _LogMultiSz(Xc, __FUNCTION__, XLL_DEBUG, Output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -876,7 +876,7 @@ fail:
 }
 
 DWORD
-StoreRemove(
+XcStoreRemove(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path
     )
@@ -910,7 +910,7 @@ fail:
 }
 
 DWORD
-StoreSetPermissions(
+XcStoreSetPermissions(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
@@ -965,7 +965,7 @@ fail:
 }
 
 DWORD
-StoreAddWatch(
+XcStoreAddWatch(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  HANDLE Event,
@@ -1011,7 +1011,7 @@ fail:
 }
 
 DWORD
-StoreRemoveWatch(
+XcStoreRemoveWatch(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Handle
     )
