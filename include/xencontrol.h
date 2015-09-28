@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _XENCONTROL_H_
+#define _XENCONTROL_H_
+
 #include <windows.h>
 #include <varargs.h>
 #include "xeniface_ioctls.h"
@@ -13,8 +15,7 @@
 extern "C" {
 #endif
 
-typedef enum _XENIFACE_LOG_LEVEL
-{
+typedef enum _XENIFACE_LOG_LEVEL {
     XLL_ERROR = 1,
     XLL_WARNING,
     XLL_INFO,
@@ -22,30 +23,41 @@ typedef enum _XENIFACE_LOG_LEVEL
     XLL_TRACE,
 } XENIFACE_LOG_LEVEL;
 
-typedef void XenifaceLogger(IN XENIFACE_LOG_LEVEL logLevel, IN const PCHAR function, IN const PWCHAR format, IN va_list args);
+typedef void
+XenifaceLogger(
+    IN XENIFACE_LOG_LEVEL logLevel,
+    IN const PCHAR function,
+    IN const PWCHAR format,
+    IN va_list args
+    );
 
 XENCONTROL_API
-void XenifaceRegisterLogger(
+void
+XenifaceRegisterLogger(
     IN  XenifaceLogger *logger
     );
 
 XENCONTROL_API
-void XenifaceSetLogLevel(
+void
+XenifaceSetLogLevel(
     IN  XENIFACE_LOG_LEVEL logLevel
     );
 
 XENCONTROL_API
-DWORD XenifaceOpen(
+DWORD
+XenifaceOpen(
     OUT HANDLE *iface
     );
 
 XENCONTROL_API
-void XenifaceClose(
+void
+XenifaceClose(
     IN  HANDLE xenIface
     );
 
 XENCONTROL_API
-DWORD EvtchnBindUnboundPort(
+DWORD
+EvtchnBindUnboundPort(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  HANDLE event,
@@ -54,7 +66,8 @@ DWORD EvtchnBindUnboundPort(
     );
 
 XENCONTROL_API
-DWORD EvtchnBindInterdomain(
+DWORD
+EvtchnBindInterdomain(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG remotePort,
@@ -64,25 +77,29 @@ DWORD EvtchnBindInterdomain(
     );
 
 XENCONTROL_API
-DWORD EvtchnClose(
+DWORD
+EvtchnClose(
     IN  HANDLE iface,
     IN  ULONG localPort
     );
 
 XENCONTROL_API
-DWORD EvtchnNotify(
+DWORD
+EvtchnNotify(
     IN  HANDLE iface,
     IN  ULONG localPort
     );
 
 XENCONTROL_API
-DWORD EvtchnUnmask(
+DWORD
+EvtchnUnmask(
     IN  HANDLE iface,
     IN  ULONG localPort
     );
 
 XENCONTROL_API
-DWORD GnttabGrantPages(
+DWORD
+GnttabGrantPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG numberPages,
@@ -94,13 +111,15 @@ DWORD GnttabGrantPages(
     );
 
 XENCONTROL_API
-DWORD GnttabUngrantPages(
+DWORD
+GnttabUngrantPages(
     IN  HANDLE iface,
     IN  PVOID address
     );
 
 XENCONTROL_API
-DWORD GnttabMapForeignPages(
+DWORD
+GnttabMapForeignPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG numberPages,
@@ -112,13 +131,15 @@ DWORD GnttabMapForeignPages(
     );
 
 XENCONTROL_API
-DWORD GnttabUnmapForeignPages(
+DWORD
+GnttabUnmapForeignPages(
     IN  HANDLE iface,
     IN  PVOID address
     );
 
 XENCONTROL_API
-DWORD StoreRead(
+DWORD
+StoreRead(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  DWORD cbOutput,
@@ -126,14 +147,16 @@ DWORD StoreRead(
     );
 
 XENCONTROL_API
-DWORD StoreWrite(
+DWORD
+StoreWrite(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  PCHAR value
     );
 
 XENCONTROL_API
-DWORD StoreDirectory(
+DWORD
+StoreDirectory(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  DWORD cbOutput,
@@ -141,13 +164,15 @@ DWORD StoreDirectory(
     );
 
 XENCONTROL_API
-DWORD StoreRemove(
+DWORD
+StoreRemove(
     IN  HANDLE iface,
     IN  PCHAR path
     );
 
 XENCONTROL_API
-DWORD StoreSetPermissions(
+DWORD
+StoreSetPermissions(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  ULONG count,
@@ -155,7 +180,8 @@ DWORD StoreSetPermissions(
     );
 
 XENCONTROL_API
-DWORD StoreAddWatch(
+DWORD
+StoreAddWatch(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  HANDLE event,
@@ -163,7 +189,8 @@ DWORD StoreAddWatch(
     );
 
 XENCONTROL_API
-DWORD StoreRemoveWatch(
+DWORD
+StoreRemoveWatch(
     IN  HANDLE iface,
     IN  PVOID handle
     );
@@ -171,3 +198,5 @@ DWORD StoreRemoveWatch(
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _XENCONTROL_H_

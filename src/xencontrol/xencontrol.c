@@ -7,7 +7,6 @@
 
 static XenifaceLogger *g_Logger = NULL;
 static XENIFACE_LOG_LEVEL g_LogLevel = XLL_INFO;
-static ULONG g_RequestId = 1;
 
 #define Log(level, format, ...) _Log(level, __FUNCTION__, format, __VA_ARGS__)
 
@@ -42,14 +41,14 @@ static ULONG g_RequestId = 1;
     _EX_Flink->Blink = _EX_Blink;\
     }
 
-typedef struct _XENCONTROL_GNTTAB_REQUEST
-{
+typedef struct _XENCONTROL_GNTTAB_REQUEST {
     LIST_ENTRY ListEntry;
     OVERLAPPED Overlapped;
     ULONG Id;
     PVOID Address;
 } XENCONTROL_GNTTAB_REQUEST, *PXENCONTROL_GNTTAB_REQUEST;
 
+static ULONG g_RequestId = 1;
 static LIST_ENTRY g_RequestList;
 static CRITICAL_SECTION g_RequestListLock;
 
@@ -79,9 +78,12 @@ FindRequest(
     return returnRequest;
 }
 
-BOOL APIENTRY DllMain(HMODULE module,
-                      DWORD reasonForCall,
-                      LPVOID reserved)
+BOOL APIENTRY
+DllMain(
+    IN  HMODULE module,
+    IN  DWORD reasonForCall,
+    IN  LPVOID reserved
+)
 {
     switch (reasonForCall)
     {
@@ -96,14 +98,16 @@ BOOL APIENTRY DllMain(HMODULE module,
     return TRUE;
 }
 
-void XenifaceSetLogLevel(
+void
+XenifaceSetLogLevel(
     IN  XENIFACE_LOG_LEVEL logLevel
     )
 {
     g_LogLevel = logLevel;
 }
 
-static void _Log(
+static void
+_Log(
     IN  XENIFACE_LOG_LEVEL logLevel,
     IN  PCHAR function,
     IN  PWCHAR format,
@@ -144,7 +148,8 @@ LogMultiSz(
     }
 }
 
-void XenifaceRegisterLogger(
+void
+XenifaceRegisterLogger(
     IN  XenifaceLogger *logger
     )
 {
@@ -153,7 +158,8 @@ void XenifaceRegisterLogger(
     FUNCTION_EXIT();
 }
 
-DWORD XenifaceOpen(
+DWORD
+XenifaceOpen(
     OUT HANDLE *iface
     )
 {
@@ -230,7 +236,8 @@ fail:
     return GetLastError();
 }
 
-void XenifaceClose(
+void
+XenifaceClose(
     IN  HANDLE iface
     )
 {
@@ -239,7 +246,8 @@ void XenifaceClose(
     FUNCTION_EXIT();
 }
 
-DWORD EvtchnBindUnboundPort(
+DWORD
+EvtchnBindUnboundPort(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  HANDLE event,
@@ -284,7 +292,8 @@ fail:
     return GetLastError();
 }
 
-DWORD EvtchnBindInterdomain(
+DWORD
+EvtchnBindInterdomain(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG remotePort,
@@ -332,7 +341,8 @@ fail:
     return GetLastError();
 }
 
-DWORD EvtchnClose(
+DWORD
+EvtchnClose(
     IN  HANDLE iface,
     IN  ULONG localPort
     )
@@ -368,7 +378,8 @@ fail:
     return GetLastError();
 }
 
-DWORD EvtchnNotify(
+DWORD
+EvtchnNotify(
     IN  HANDLE iface,
     IN  ULONG localPort
     )
@@ -404,7 +415,8 @@ fail:
     return GetLastError();
 }
 
-DWORD EvtchnUnmask(
+DWORD
+EvtchnUnmask(
     IN  HANDLE iface,
     IN  ULONG localPort
     )
@@ -440,7 +452,8 @@ fail:
     return GetLastError();
 }
 
-DWORD GnttabGrantPages(
+DWORD
+GnttabGrantPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG numberPages,
@@ -548,7 +561,8 @@ fail:
     return status;
 }
 
-DWORD GnttabUngrantPages(
+DWORD
+GnttabUngrantPages(
     IN  HANDLE iface,
     IN  PVOID address
     )
@@ -601,7 +615,8 @@ fail:
     return status;
 }
 
-DWORD GnttabMapForeignPages(
+DWORD
+GnttabMapForeignPages(
     IN  HANDLE iface,
     IN  USHORT remoteDomain,
     IN  ULONG numberPages,
@@ -710,7 +725,8 @@ fail:
     return status;
 }
 
-DWORD GnttabUnmapForeignPages(
+DWORD
+GnttabUnmapForeignPages(
     IN  HANDLE iface,
     IN  PVOID address
     )
@@ -763,7 +779,8 @@ fail:
     return status;
 }
 
-DWORD StoreRead(
+DWORD
+StoreRead(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  DWORD cbOutput,
@@ -800,7 +817,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreWrite(
+DWORD
+StoreWrite(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  PCHAR value
@@ -850,7 +868,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreDirectory(
+DWORD
+StoreDirectory(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  DWORD cbOutput,
@@ -887,7 +906,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreRemove(
+DWORD
+StoreRemove(
     IN  HANDLE iface,
     IN  PCHAR path
     )
@@ -920,7 +940,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreSetPermissions(
+DWORD
+StoreSetPermissions(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  ULONG count,
@@ -974,7 +995,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreAddWatch(
+DWORD
+StoreAddWatch(
     IN  HANDLE iface,
     IN  PCHAR path,
     IN  HANDLE event,
@@ -1019,7 +1041,8 @@ fail:
     return GetLastError();
 }
 
-DWORD StoreRemoveWatch(
+DWORD
+StoreRemoveWatch(
     IN  HANDLE iface,
     IN  PVOID handle
     )
