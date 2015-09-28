@@ -7,8 +7,8 @@
 #include "xencontrol.h"
 #include "xencontrol_private.h"
 
-static XenifaceLogger *g_Logger = NULL;
-static XENIFACE_LOG_LEVEL g_LogLevel = XLL_INFO;
+static XencontrolLogger *g_Logger = NULL;
+static XENCONTROL_LOG_LEVEL g_LogLevel = XLL_INFO;
 static ULONG g_RequestId = 1;
 static LIST_ENTRY g_RequestList;
 static CRITICAL_SECTION g_RequestListLock;
@@ -18,35 +18,35 @@ FindRequest(
     IN  PVOID Address
     )
 {
-    PLIST_ENTRY entry;
-    PXENCONTROL_GNTTAB_REQUEST returnRequest = NULL;
+    PLIST_ENTRY Entry;
+    PXENCONTROL_GNTTAB_REQUEST ReturnRequest = NULL;
 
     EnterCriticalSection(&g_RequestListLock);
-    entry = g_RequestList.Flink;
-    while (entry != &g_RequestList)
+    Entry = g_RequestList.Flink;
+    while (Entry != &g_RequestList)
     {
-        PXENCONTROL_GNTTAB_REQUEST request = CONTAINING_RECORD(entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
-        if (request->Address == Address)
+        PXENCONTROL_GNTTAB_REQUEST Request = CONTAINING_RECORD(Entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
+        if (Request->Address == Address)
         {
-            returnRequest = request;
+            ReturnRequest = Request;
             break;
         }
 
-        entry = entry->Flink;
+        Entry = Entry->Flink;
     }
     LeaveCriticalSection(&g_RequestListLock);
 
-    return returnRequest;
+    return ReturnRequest;
 }
 
 BOOL APIENTRY
 DllMain(
-    IN  HMODULE module,
-    IN  DWORD reasonForCall,
-    IN  LPVOID reserved
+    IN  HMODULE Module,
+    IN  DWORD ReasonForCall,
+    IN  LPVOID Reserved
 )
 {
-    switch (reasonForCall)
+    switch (ReasonForCall)
     {
     case DLL_PROCESS_ATTACH:
         InitializeCriticalSection(&g_RequestListLock);
@@ -61,40 +61,40 @@ DllMain(
 
 void
 XenifaceSetLogLevel(
-    IN  XENIFACE_LOG_LEVEL logLevel
+    IN  XENCONTROL_LOG_LEVEL LogLevel
     )
 {
-    g_LogLevel = logLevel;
+    g_LogLevel = LogLevel;
 }
 
 static void
 _Log(
-    IN  XENIFACE_LOG_LEVEL logLevel,
-    IN  PCHAR function,
-    IN  PWCHAR format,
+    IN  XENCONTROL_LOG_LEVEL LogLevel,
+    IN  PCHAR Function,
+    IN  PWCHAR Format,
     ...
     )
 {
-    va_list args;
-    DWORD lastError;
+    va_list Args;
+    DWORD LastError;
 
     if (!g_Logger)
         return;
 
-    if (logLevel > g_LogLevel)
+    if (LogLevel > g_LogLevel)
         return;
 
-    lastError = GetLastError();
-    va_start(args, format);
-    g_Logger(logLevel, function, format, args);
-    va_end(args);
-    SetLastError(lastError);
+    LastError = GetLastError();
+    va_start(Args, Format);
+    g_Logger(LogLevel, Function, Format, Args);
+    va_end(Args);
+    SetLastError(LastError);
 }
 
 static void
 LogMultiSz(
     IN  PCHAR Caller,
-    IN  XENIFACE_LOG_LEVEL Level,
+    IN  XENCONTROL_LOG_LEVEL Level,
     IN  PCHAR MultiSz
     )
 {
@@ -110,67 +110,67 @@ LogMultiSz(
 }
 
 void
-XenifaceRegisterLogger(
-    IN  XenifaceLogger *logger
+XencontrolRegisterLogger(
+    IN  XencontrolLogger *Logger
     )
 {
     FUNCTION_ENTER();
-    g_Logger = logger;
+    g_Logger = Logger;
     FUNCTION_EXIT();
 }
 
 DWORD
-XenifaceOpen(
-    OUT HANDLE *iface
+XencontrolOpen(
+    OUT HANDLE *Iface
     )
 {
-    HDEVINFO devInfo;
-    SP_DEVICE_INTERFACE_DATA sdid;
-    SP_DEVICE_INTERFACE_DETAIL_DATA *sdidd = NULL;
-    DWORD bufferSize;
+    HDEVINFO DevInfo;
+    SP_DEVICE_INTERFACE_DATA InterfaceData;
+    SP_DEVICE_INTERFACE_DETAIL_DATA *DetailData = NULL;
+    DWORD BufferSize;
 
     FUNCTION_ENTER();
 
-    devInfo = SetupDiGetClassDevs(&GUID_INTERFACE_XENIFACE, 0, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-    if (devInfo == INVALID_HANDLE_VALUE)
+    DevInfo = SetupDiGetClassDevs(&GUID_INTERFACE_XENIFACE, 0, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (DevInfo == INVALID_HANDLE_VALUE)
     {
         Log(XLL_ERROR, L"XENIFACE device class doesn't exist");
         goto fail;
     }
 
-    sdid.cbSize = sizeof(sdid);
-    if (!SetupDiEnumDeviceInterfaces(devInfo, NULL, &GUID_INTERFACE_XENIFACE, 0, &sdid))
+    InterfaceData.cbSize = sizeof(InterfaceData);
+    if (!SetupDiEnumDeviceInterfaces(DevInfo, NULL, &GUID_INTERFACE_XENIFACE, 0, &InterfaceData))
     {
         Log(XLL_ERROR, L"Failed to enumerate XENIFACE devices");
         goto fail;
     }
 
-    SetupDiGetDeviceInterfaceDetail(devInfo, &sdid, NULL, 0, &bufferSize, NULL);
+    SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, NULL, 0, &BufferSize, NULL);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
     {
         Log(XLL_ERROR, L"Failed to get buffer size for device details");
         goto fail;
     }
 
-    // Using 'bufferSize' from failed function call
+    // Using 'BufferSize' from failed function call
     // ...yeah, that's the point
 #pragma warning(suppress: 6102)
-    sdidd = (SP_DEVICE_INTERFACE_DETAIL_DATA *)malloc(bufferSize);
-    if (!sdidd)
+    DetailData = (SP_DEVICE_INTERFACE_DETAIL_DATA *)malloc(BufferSize);
+    if (!DetailData)
     {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
 
-    sdidd->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
+    DetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
-    if (!SetupDiGetDeviceInterfaceDetail(devInfo, &sdid, sdidd, bufferSize, NULL, NULL))
+    if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, DetailData, BufferSize, NULL, NULL))
     {
         Log(XLL_ERROR, L"Failed to get XENIFACE device path");
         goto fail;
     }
 
-    *iface = CreateFile(sdidd->DevicePath,
+    *Iface = CreateFile(DetailData->DevicePath,
                         FILE_GENERIC_READ | FILE_GENERIC_WRITE,
                         0,
                         NULL,
@@ -178,71 +178,71 @@ XenifaceOpen(
                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
                         NULL);
 
-    if (*iface == INVALID_HANDLE_VALUE)
+    if (*Iface == INVALID_HANDLE_VALUE)
     {
-        Log(XLL_ERROR, L"Failed to open XENIFACE device, path: %s", sdidd->DevicePath);
+        Log(XLL_ERROR, L"Failed to open XENIFACE device, path: %s", DetailData->DevicePath);
         goto fail;
     }
 
-    Log(XLL_DEBUG, L"Device handle: 0x%x", *iface);
+    Log(XLL_DEBUG, L"Device handle: 0x%x", *Iface);
 
-    free(sdidd);
+    free(DetailData);
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    free(sdidd);
+    free(DetailData);
     FUNCTION_EXIT();
     return GetLastError();
 }
 
 void
-XenifaceClose(
-    IN  HANDLE iface
+XencontrolClose(
+    IN  HANDLE Iface
     )
 {
     FUNCTION_ENTER();
-    CloseHandle(iface);
+    CloseHandle(Iface);
     FUNCTION_EXIT();
 }
 
 DWORD
 EvtchnBindUnboundPort(
-    IN  HANDLE iface,
-    IN  USHORT remoteDomain,
-    IN  HANDLE event,
-    IN  BOOL mask,
-    OUT ULONG *localPort
+    IN  HANDLE Iface,
+    IN  USHORT RemoteDomain,
+    IN  HANDLE Event,
+    IN  BOOL Mask,
+    OUT ULONG *LocalPort
     )
 {
-    EVTCHN_BIND_UNBOUND_PORT_IN in;
-    EVTCHN_BIND_UNBOUND_PORT_OUT out;
-    DWORD returned;
-    BOOL success;
+    EVTCHN_BIND_UNBOUND_PORT_IN In;
+    EVTCHN_BIND_UNBOUND_PORT_OUT Out;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    in.RemoteDomain = remoteDomain;
-    in.Event = event;
-    in.Mask = !!mask;
+    In.RemoteDomain = RemoteDomain;
+    In.Event = Event;
+    In.Mask = !!Mask;
 
-    Log(XLL_DEBUG, L"RemoteDomain: %d, Event: 0x%x, Mask: %d", remoteDomain, event, mask);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"RemoteDomain: %d, Event: 0x%x, Mask: %d", RemoteDomain, Event, Mask);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT,
-                              &in, sizeof(in),
-                              &out, sizeof(out),
-                              &returned,
+                              &In, sizeof(In),
+                              &Out, sizeof(Out),
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT failed");
         goto fail;
     }
 
-    *localPort = out.LocalPort;
-    Log(XLL_DEBUG, L"LocalPort: %d", *localPort);
+    *LocalPort = Out.LocalPort;
+    Log(XLL_DEBUG, L"LocalPort: %d", *LocalPort);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -255,43 +255,43 @@ fail:
 
 DWORD
 EvtchnBindInterdomain(
-    IN  HANDLE iface,
-    IN  USHORT remoteDomain,
-    IN  ULONG remotePort,
-    IN  HANDLE event,
-    IN  BOOL mask,
-    OUT ULONG *localPort
+    IN  HANDLE Iface,
+    IN  USHORT RemoteDomain,
+    IN  ULONG RemotePort,
+    IN  HANDLE Event,
+    IN  BOOL Mask,
+    OUT ULONG *LocalPort
     )
 {
-    EVTCHN_BIND_INTERDOMAIN_IN in;
-    EVTCHN_BIND_INTERDOMAIN_OUT out;
-    DWORD returned;
-    BOOL success;
+    EVTCHN_BIND_INTERDOMAIN_IN In;
+    EVTCHN_BIND_INTERDOMAIN_OUT Out;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    in.RemoteDomain = remoteDomain;
-    in.RemotePort = remotePort;
-    in.Event = event;
-    in.Mask = !!mask;
+    In.RemoteDomain = RemoteDomain;
+    In.RemotePort = RemotePort;
+    In.Event = Event;
+    In.Mask = !!Mask;
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, RemotePort %d, Event: 0x%x, Mask: %d",
-        remoteDomain, remotePort, event, mask);
-    success = DeviceIoControl(iface,
+        RemoteDomain, RemotePort, Event, Mask);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN,
-                              &in, sizeof(in),
-                              &out, sizeof(out),
-                              &returned,
+                              &In, sizeof(In),
+                              &Out, sizeof(Out),
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN failed");
         goto fail;
     }
 
-    *localPort = out.LocalPort;
-    Log(XLL_DEBUG, L"LocalPort: %d", *localPort);
+    *LocalPort = Out.LocalPort;
+    Log(XLL_DEBUG, L"LocalPort: %d", *LocalPort);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -304,27 +304,27 @@ fail:
 
 DWORD
 EvtchnClose(
-    IN  HANDLE iface,
-    IN  ULONG localPort
+    IN  HANDLE Iface,
+    IN  ULONG LocalPort
     )
 {
-    EVTCHN_CLOSE_IN in;
-    DWORD returned;
-    BOOL success;
+    EVTCHN_CLOSE_IN In;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    in.LocalPort = localPort;
+    In.LocalPort = LocalPort;
 
-    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_EVTCHN_CLOSE,
-                              &in, sizeof(in),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_CLOSE failed");
         goto fail;
@@ -341,27 +341,27 @@ fail:
 
 DWORD
 EvtchnNotify(
-    IN  HANDLE iface,
-    IN  ULONG localPort
+    IN  HANDLE Iface,
+    IN  ULONG LocalPort
     )
 {
-    EVTCHN_NOTIFY_IN in;
-    DWORD returned;
-    BOOL success;
+    EVTCHN_NOTIFY_IN In;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    in.LocalPort = localPort;
+    In.LocalPort = LocalPort;
 
-    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_EVTCHN_NOTIFY,
-                              &in, sizeof(in),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_NOTIFY failed");
         goto fail;
@@ -378,27 +378,27 @@ fail:
 
 DWORD
 EvtchnUnmask(
-    IN  HANDLE iface,
-    IN  ULONG localPort
+    IN  HANDLE Iface,
+    IN  ULONG LocalPort
     )
 {
-    EVTCHN_UNMASK_IN in;
-    DWORD returned;
-    BOOL success;
+    EVTCHN_UNMASK_IN In;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    in.LocalPort = localPort;
+    In.LocalPort = LocalPort;
 
-    Log(XLL_DEBUG, L"LocalPort: %d", localPort);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"LocalPort: %d", LocalPort);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_EVTCHN_UNMASK,
-                              &in, sizeof(in),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_UNMASK failed");
         goto fail;
@@ -415,60 +415,60 @@ fail:
 
 DWORD
 GnttabGrantPages(
-    IN  HANDLE iface,
-    IN  USHORT remoteDomain,
-    IN  ULONG numberPages,
-    IN  ULONG notifyOffset,
-    IN  ULONG notifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS flags,
-    OUT PVOID *address,
-    OUT ULONG *references
+    IN  HANDLE Iface,
+    IN  USHORT RemoteDomain,
+    IN  ULONG NumberPages,
+    IN  ULONG NotifyOffset,
+    IN  ULONG NotifyPort,
+    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    OUT PVOID *Address,
+    OUT ULONG *References
     )
 {
-    GNTTAB_GRANT_PAGES_IN in1;
-    GNTTAB_GET_GRANTS_IN in2;
-    GNTTAB_GET_GRANTS_OUT *out2;
-    PXENCONTROL_GNTTAB_REQUEST request;
-    DWORD returned, size;
-    BOOL success;
-    DWORD status;
+    GNTTAB_GRANT_PAGES_IN In1;
+    GNTTAB_GET_GRANTS_IN In2;
+    GNTTAB_GET_GRANTS_OUT *Out2;
+    PXENCONTROL_GNTTAB_REQUEST Request;
+    DWORD Returned, Size;
+    BOOL Success;
+    DWORD Status;
 
     FUNCTION_ENTER();
 
-    in1.RequestId = g_RequestId;
-    in1.RemoteDomain = remoteDomain;
-    in1.NumberPages = numberPages;
-    in1.NotifyOffset = notifyOffset;
-    in1.NotifyPort = notifyPort;
-    in1.Flags = flags;
+    In1.RequestId = g_RequestId;
+    In1.RemoteDomain = RemoteDomain;
+    In1.NumberPages = NumberPages;
+    In1.NotifyOffset = NotifyOffset;
+    In1.NotifyPort = NotifyPort;
+    In1.Flags = Flags;
 
-    size = sizeof(GNTTAB_GET_GRANTS_OUT) + numberPages * sizeof(ULONG);
-    out2 = malloc(size);
-    request = malloc(sizeof(*request));
+    Size = sizeof(GNTTAB_GET_GRANTS_OUT) + NumberPages * sizeof(ULONG);
+    Out2 = malloc(Size);
+    Request = malloc(sizeof(*Request));
 
-    status = ERROR_OUTOFMEMORY;
-    if (!request || !out2)
+    Status = ERROR_OUTOFMEMORY;
+    if (!Request || !Out2)
         goto fail;
 
-    ZeroMemory(request, sizeof(*request));
-    request->Id = in1.RequestId;
+    ZeroMemory(Request, sizeof(*Request));
+    Request->Id = In1.RequestId;
     //request->Overlapped.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
     Log(XLL_DEBUG, L"Id %lu, RemoteDomain: %d, NumberPages: %lu, NotifyOffset: 0x%x, NotifyPort: %lu, Flags: 0x%x",
-        in1.RequestId, remoteDomain, numberPages, notifyOffset, notifyPort, flags);
+        In1.RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
-    success = DeviceIoControl(iface,
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_GRANT_PAGES,
-                              &in1, sizeof(in1),
+                              &In1, sizeof(In1),
                               NULL, 0,
-                              &returned,
-                              &request->Overlapped);
+                              &Returned,
+                              &Request->Overlapped);
 
-    status = GetLastError();
+    Status = GetLastError();
     // this IOCTL is expected to be pending on success
-    if (!success)
+    if (!Success)
     {
-        if (status != ERROR_IO_PENDING)
+        if (Status != ERROR_IO_PENDING)
         {
             Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GRANT_PAGES failed");
             goto fail;
@@ -477,164 +477,164 @@ GnttabGrantPages(
     else
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GRANT_PAGES not pending");
-        status = ERROR_UNIDENTIFIED_ERROR;
+        Status = ERROR_UNIDENTIFIED_ERROR;
         goto fail;
     }
 
     // get actual result
-    in2.RequestId = in1.RequestId;
-    success = DeviceIoControl(iface,
+    In2.RequestId = In1.RequestId;
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_GET_GRANTS,
-                              &in2, sizeof(in2),
-                              out2, size,
-                              &returned,
+                              &In2, sizeof(In2),
+                              Out2, Size,
+                              &Returned,
                               NULL);
 
-    status = GetLastError();
+    Status = GetLastError();
     // FIXME: error handling
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GET_GRANTS failed");
         goto fail;
     }
 
-    request->Address = out2->Address;
+    Request->Address = Out2->Address;
     EnterCriticalSection(&g_RequestListLock);
-    InsertTailList(&g_RequestList, &request->ListEntry);
+    InsertTailList(&g_RequestList, &Request->ListEntry);
     g_RequestId++; // FIXME: synchronization
     LeaveCriticalSection(&g_RequestListLock);
 
-    *address = out2->Address;
-    memcpy(references, &out2->References, numberPages * sizeof(ULONG));
-    Log(XLL_DEBUG, L"Address: 0x%p", *address);
-    for (ULONG i = 0; i < numberPages; i++)
-        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, out2->References[i]);
+    *Address = Out2->Address;
+    memcpy(References, &Out2->References, NumberPages * sizeof(ULONG));
+    Log(XLL_DEBUG, L"Address: 0x%p", *Address);
+    for (ULONG i = 0; i < NumberPages; i++)
+        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, Out2->References[i]);
 
-    free(out2);
+    free(Out2);
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
-    Log(XLL_ERROR, L"Error: %d 0x%x", status, status);
-    free(out2);
-    free(request);
+    Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
+    free(Out2);
+    free(Request);
     FUNCTION_EXIT();
-    return status;
+    return Status;
 }
 
 DWORD
 GnttabUngrantPages(
-    IN  HANDLE iface,
-    IN  PVOID address
+    IN  HANDLE Iface,
+    IN  PVOID Address
     )
 {
-    GNTTAB_UNGRANT_PAGES_IN in;
-    PXENCONTROL_GNTTAB_REQUEST request;
-    DWORD returned;
-    BOOL success;
-    DWORD status;
+    GNTTAB_UNGRANT_PAGES_IN In;
+    PXENCONTROL_GNTTAB_REQUEST Request;
+    DWORD Returned;
+    BOOL Success;
+    DWORD Status;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Address: 0x%p", address);
+    Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
-    status = ERROR_NOT_FOUND;
-    request = FindRequest(address);
-    if (!request)
+    Status = ERROR_NOT_FOUND;
+    Request = FindRequest(Address);
+    if (!Request)
     {
-        Log(XLL_ERROR, L"Address %p not granted", address);
+        Log(XLL_ERROR, L"Address %p not granted", Address);
         goto fail;
     }
 
-    in.RequestId = request->Id;
+    In.RequestId = Request->Id;
 
-    success = DeviceIoControl(iface,
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES,
-                              &in, sizeof(in),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    status = GetLastError();
-    if (!success)
+    Status = GetLastError();
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES failed");
         goto fail;
     }
 
     EnterCriticalSection(&g_RequestListLock);
-    RemoveEntryList(&request->ListEntry);
+    RemoveEntryList(&Request->ListEntry);
     LeaveCriticalSection(&g_RequestListLock);
-    free(request);
+    free(Request);
 
     FUNCTION_EXIT();
-    return status;
+    return Status;
 
 fail:
-    Log(XLL_ERROR, L"Error: %d 0x%x", status, status);
+    Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     FUNCTION_EXIT();
-    return status;
+    return Status;
 }
 
 DWORD
 GnttabMapForeignPages(
-    IN  HANDLE iface,
-    IN  USHORT remoteDomain,
-    IN  ULONG numberPages,
-    IN  PULONG references,
-    IN  ULONG notifyOffset,
-    IN  ULONG notifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS flags,
-    OUT PVOID *address
+    IN  HANDLE Iface,
+    IN  USHORT RemoteDomain,
+    IN  ULONG NumberPages,
+    IN  PULONG References,
+    IN  ULONG NotifyOffset,
+    IN  ULONG NotifyPort,
+    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    OUT PVOID *Address
     )
 {
-    GNTTAB_MAP_FOREIGN_PAGES_IN *in1;
-    GNTTAB_GET_MAP_IN in2;
-    GNTTAB_GET_MAP_OUT out2;
-    PXENCONTROL_GNTTAB_REQUEST request;
-    DWORD returned, size;
-    BOOL success;
-    DWORD status;
+    GNTTAB_MAP_FOREIGN_PAGES_IN *In1;
+    GNTTAB_GET_MAP_IN In2;
+    GNTTAB_GET_MAP_OUT Out2;
+    PXENCONTROL_GNTTAB_REQUEST Request;
+    DWORD Returned, Size;
+    BOOL Success;
+    DWORD Status;
 
     FUNCTION_ENTER();
 
-    status = ERROR_OUTOFMEMORY;
-    size = sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) + numberPages * sizeof(ULONG);
-    in1 = malloc(size);
-    request = malloc(sizeof(*request));
-    if (!in1 || !request)
+    Status = ERROR_OUTOFMEMORY;
+    Size = sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) + NumberPages * sizeof(ULONG);
+    In1 = malloc(Size);
+    Request = malloc(sizeof(*Request));
+    if (!In1 || !Request)
         goto fail;
 
-    in1->RequestId = g_RequestId;
-    in1->RemoteDomain = remoteDomain;
-    in1->NumberPages = numberPages;
-    in1->NotifyOffset = notifyOffset;
-    in1->NotifyPort = notifyPort;
-    in1->Flags = flags;
-    memcpy(&in1->References, references, numberPages * sizeof(ULONG));
+    In1->RequestId = g_RequestId;
+    In1->RemoteDomain = RemoteDomain;
+    In1->NumberPages = NumberPages;
+    In1->NotifyOffset = NotifyOffset;
+    In1->NotifyPort = NotifyPort;
+    In1->Flags = Flags;
+    memcpy(&In1->References, References, NumberPages * sizeof(ULONG));
 
-    ZeroMemory(request, sizeof(*request));
-    request->Id = in1->RequestId;
+    ZeroMemory(Request, sizeof(*Request));
+    Request->Id = In1->RequestId;
     //request->Overlapped.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
     Log(XLL_DEBUG, L"Id %lu, RemoteDomain: %d, NumberPages: %d, NotifyOffset: 0x%x, NotifyPort: %d, Flags: 0x%x",
-        in1->RequestId, remoteDomain, numberPages, notifyOffset, notifyPort, flags);
+        In1->RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
-    for (ULONG i = 0; i < numberPages; i++)
-        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, references[i]);
+    for (ULONG i = 0; i < NumberPages; i++)
+        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, References[i]);
 
-    success = DeviceIoControl(iface,
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES,
-                              in1, size,
+                              In1, Size,
                               NULL, 0,
-                              &returned,
-                              &request->Overlapped);
+                              &Returned,
+                              &Request->Overlapped);
 
-    status = GetLastError();
+    Status = GetLastError();
     // this IOCTL is expected to be pending on success
-    if (!success)
+    if (!Success)
     {
-        if (status != ERROR_IO_PENDING)
+        if (Status != ERROR_IO_PENDING)
         {
             Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES failed");
             goto fail;
@@ -643,131 +643,131 @@ GnttabMapForeignPages(
     else
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES not pending");
-        status = ERROR_UNIDENTIFIED_ERROR;
+        Status = ERROR_UNIDENTIFIED_ERROR;
         goto fail;
     }
 
     // get actual result
-    in2.RequestId = in1->RequestId;
-    success = DeviceIoControl(iface,
+    In2.RequestId = In1->RequestId;
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_GET_MAP,
-                              &in2, sizeof(in2),
-                              &out2, sizeof(out2),
-                              &returned,
+                              &In2, sizeof(In2),
+                              &Out2, sizeof(Out2),
+                              &Returned,
                               NULL);
 
-    status = GetLastError();
+    Status = GetLastError();
     // FIXME: error handling
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GET_MAP failed");
         goto fail;
     }
 
-    request->Address = out2.Address;
+    Request->Address = Out2.Address;
     EnterCriticalSection(&g_RequestListLock);
-    InsertTailList(&g_RequestList, &request->ListEntry);
+    InsertTailList(&g_RequestList, &Request->ListEntry);
     g_RequestId++; // FIXME: synchronization
     LeaveCriticalSection(&g_RequestListLock);
 
-    *address = out2.Address;
+    *Address = Out2.Address;
 
-    Log(XLL_DEBUG, L"Address: 0x%p", *address);
+    Log(XLL_DEBUG, L"Address: 0x%p", *Address);
 
-    free(in1);
+    free(In1);
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
-    Log(XLL_ERROR, L"Error: %d 0x%x", status, status);
-    free(in1);
-    free(request);
+    Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
+    free(In1);
+    free(Request);
     FUNCTION_EXIT();
-    return status;
+    return Status;
 }
 
 DWORD
 GnttabUnmapForeignPages(
-    IN  HANDLE iface,
-    IN  PVOID address
+    IN  HANDLE Iface,
+    IN  PVOID Address
     )
 {
-    GNTTAB_UNMAP_FOREIGN_PAGES_IN in;
-    PXENCONTROL_GNTTAB_REQUEST request;
-    DWORD returned;
-    BOOL success;
-    DWORD status;
+    GNTTAB_UNMAP_FOREIGN_PAGES_IN In;
+    PXENCONTROL_GNTTAB_REQUEST Request;
+    DWORD Returned;
+    BOOL Success;
+    DWORD Status;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Address: 0x%p", address);
+    Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
-    status = ERROR_NOT_FOUND;
-    request = FindRequest(address);
-    if (!request)
+    Status = ERROR_NOT_FOUND;
+    Request = FindRequest(Address);
+    if (!Request)
     {
-        Log(XLL_ERROR, L"Address %p not mapped", address);
+        Log(XLL_ERROR, L"Address %p not mapped", Address);
         goto fail;
     }
 
-    in.RequestId = request->Id;
+    In.RequestId = Request->Id;
 
-    success = DeviceIoControl(iface,
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES,
-                              &in, sizeof(in),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    status = GetLastError();
-    if (!success)
+    Status = GetLastError();
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES failed");
         goto fail;
     }
 
     EnterCriticalSection(&g_RequestListLock);
-    RemoveEntryList(&request->ListEntry);
+    RemoveEntryList(&Request->ListEntry);
     LeaveCriticalSection(&g_RequestListLock);
-    free(request);
+    free(Request);
 
     FUNCTION_EXIT();
-    return status;
+    return Status;
 
 fail:
-    Log(XLL_ERROR, L"Error: %d 0x%x", status, status);
+    Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     FUNCTION_EXIT();
-    return status;
+    return Status;
 }
 
 DWORD
 StoreRead(
-    IN  HANDLE iface,
-    IN  PCHAR path,
+    IN  HANDLE Iface,
+    IN  PCHAR Path,
     IN  DWORD cbOutput,
-    OUT CHAR *output
+    OUT CHAR *Output
     )
 {
-    DWORD returned;
-    BOOL success;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S'", path);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"Path: '%S'", Path);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_READ,
-                              path, (DWORD)strlen(path) + 1,
-                              output, cbOutput,
-                              &returned,
+                              Path, (DWORD)strlen(Path) + 1,
+                              Output, cbOutput,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_READ failed");
         goto fail;
     }
 
-    Log(XLL_DEBUG, L"Value: '%S'", output);
+    Log(XLL_DEBUG, L"Value: '%S'", Output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -780,83 +780,83 @@ fail:
 
 DWORD
 StoreWrite(
-    IN  HANDLE iface,
-    IN  PCHAR path,
-    IN  PCHAR value
+    IN  HANDLE Iface,
+    IN  PCHAR Path,
+    IN  PCHAR Value
     )
 {
-    PCHAR buffer;
+    PCHAR Buffer;
     DWORD cbBuffer;
-    DWORD returned;
-    BOOL success;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    cbBuffer = (DWORD)(strlen(path) + 1 + strlen(value) + 1 + 1);
-    buffer = malloc(cbBuffer);
-    if (!buffer)
+    cbBuffer = (DWORD)(strlen(Path) + 1 + strlen(Value) + 1 + 1);
+    Buffer = malloc(cbBuffer);
+    if (!Buffer)
     {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
 
-    ZeroMemory(buffer, cbBuffer);
-    memcpy(buffer, path, strlen(path));
-    memcpy(buffer + strlen(path) + 1, value, strlen(value));
+    ZeroMemory(Buffer, cbBuffer);
+    memcpy(Buffer, Path, strlen(Path));
+    memcpy(Buffer + strlen(Path) + 1, Value, strlen(Value));
 
-    Log(XLL_DEBUG, L"Path: '%S', Value: '%S'", path, value);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"Path: '%S', Value: '%S'", Path, Value);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_WRITE,
-                              buffer, cbBuffer,
+                              Buffer, cbBuffer,
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_WRITE failed");
         goto fail;
     }
 
-    free(buffer);
+    free(Buffer);
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    free(buffer);
+    free(Buffer);
     FUNCTION_EXIT();
     return GetLastError();
 }
 
 DWORD
 StoreDirectory(
-    IN  HANDLE iface,
-    IN  PCHAR path,
+    IN  HANDLE Iface,
+    IN  PCHAR Path,
     IN  DWORD cbOutput,
-    OUT CHAR *output
+    OUT CHAR *Output
     )
 {
-    DWORD returned;
-    BOOL success;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S'", path);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"Path: '%S'", Path);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_DIRECTORY,
-                              path, (DWORD)strlen(path) + 1,
-                              output, cbOutput,
-                              &returned,
+                              Path, (DWORD)strlen(Path) + 1,
+                              Output, cbOutput,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_DIRECTORY failed");
         goto fail;
     }
 
-    LogMultiSz(__FUNCTION__, XLL_DEBUG, output);
+    LogMultiSz(__FUNCTION__, XLL_DEBUG, Output);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -869,24 +869,24 @@ fail:
 
 DWORD
 StoreRemove(
-    IN  HANDLE iface,
-    IN  PCHAR path
+    IN  HANDLE Iface,
+    IN  PCHAR Path
     )
 {
-    DWORD returned;
-    BOOL success;
+    DWORD Returned;
+    BOOL Success;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S'", path);
-    success = DeviceIoControl(iface,
+    Log(XLL_DEBUG, L"Path: '%S'", Path);
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_REMOVE,
-                              path, (DWORD)strlen(path) + 1,
+                              Path, (DWORD)strlen(Path) + 1,
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_REMOVE failed");
         goto fail;
@@ -903,95 +903,95 @@ fail:
 
 DWORD
 StoreSetPermissions(
-    IN  HANDLE iface,
-    IN  PCHAR path,
-    IN  ULONG count,
-    IN  PXENBUS_STORE_PERMISSION permissions
+    IN  HANDLE Iface,
+    IN  PCHAR Path,
+    IN  ULONG Count,
+    IN  PXENBUS_STORE_PERMISSION Permissions
     )
 {
-    DWORD returned, size, i;
-    BOOL success;
-    STORE_SET_PERMISSIONS_IN *in1 = NULL;
+    DWORD Returned, Size;
+    BOOL Success;
+    STORE_SET_PERMISSIONS_IN *In = NULL;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S', count: %lu", path, count);
-    for (i = 0; i < count; i++)
-        Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", permissions[i].Domain, permissions[i].Mask);
+    Log(XLL_DEBUG, L"Path: '%S', count: %lu", Path, Count);
+    for (int i = 0; i < Count; i++)
+        Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", Permissions[i].Domain, Permissions[i].Mask);
 
-    size = sizeof(STORE_SET_PERMISSIONS_IN) + count * sizeof(XENBUS_STORE_PERMISSION);
-    in1 = malloc(size);
-    if (!in1)
+    Size = sizeof(STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);
+    In = malloc(Size);
+    if (!In)
     {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
 
-    in1->Path = path;
-    in1->PathLength = (DWORD)strlen(in1->Path) + 1;
-    in1->NumberPermissions = count;
-    memcpy(&in1->Permissions, permissions, count * sizeof(XENBUS_STORE_PERMISSION));
+    In->Path = Path;
+    In->PathLength = (DWORD)strlen(In->Path) + 1;
+    In->NumberPermissions = Count;
+    memcpy(&In->Permissions, Permissions, Count * sizeof(XENBUS_STORE_PERMISSION));
 
-    success = DeviceIoControl(iface,
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_SET_PERMISSIONS,
-                              in1, size,
+                              In, Size,
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_SET_PERMISSIONS failed");
         goto fail;
     }
 
-    free(in1);
+    free(In);
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    free(in1);
+    free(In);
     FUNCTION_EXIT();
     return GetLastError();
 }
 
 DWORD
 StoreAddWatch(
-    IN  HANDLE iface,
-    IN  PCHAR path,
-    IN  HANDLE event,
-    OUT PVOID *handle
+    IN  HANDLE Iface,
+    IN  PCHAR Path,
+    IN  HANDLE Event,
+    OUT PVOID *Handle
     )
 {
-    DWORD returned;
-    BOOL success;
-    STORE_ADD_WATCH_IN in1;
-    STORE_ADD_WATCH_OUT out;
+    DWORD Returned;
+    BOOL Success;
+    STORE_ADD_WATCH_IN In;
+    STORE_ADD_WATCH_OUT Out;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Path: '%S', Event: 0x%x", path, event);
+    Log(XLL_DEBUG, L"Path: '%S', Event: 0x%x", Path, Event);
 
-    in1.Path = path;
-    in1.PathLength = (DWORD)strlen(path) + 1;
-    in1.Event = event;
-    success = DeviceIoControl(iface,
+    In.Path = Path;
+    In.PathLength = (DWORD)strlen(Path) + 1;
+    In.Event = Event;
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_ADD_WATCH,
-                              &in1, sizeof(in1),
-                              &out, sizeof(out),
-                              &returned,
+                              &In, sizeof(In),
+                              &Out, sizeof(Out),
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_ADD_WATCH failed");
         goto fail;
     }
 
-    *handle = out.Context;
+    *Handle = Out.Context;
 
-    Log(XLL_DEBUG, L"Handle: %p", *handle);
+    Log(XLL_DEBUG, L"Handle: %p", *Handle);
 
     FUNCTION_EXIT();
     return ERROR_SUCCESS;
@@ -1004,27 +1004,27 @@ fail:
 
 DWORD
 StoreRemoveWatch(
-    IN  HANDLE iface,
-    IN  PVOID handle
+    IN  HANDLE Iface,
+    IN  PVOID Handle
     )
 {
-    DWORD returned;
-    BOOL success;
-    STORE_REMOVE_WATCH_IN in1;
+    DWORD Returned;
+    BOOL Success;
+    STORE_REMOVE_WATCH_IN In;
 
     FUNCTION_ENTER();
 
-    Log(XLL_DEBUG, L"Handle: %p", handle);
+    Log(XLL_DEBUG, L"Handle: %p", Handle);
 
-    in1.Context = handle;
-    success = DeviceIoControl(iface,
+    In.Context = Handle;
+    Success = DeviceIoControl(Iface,
                               IOCTL_XENIFACE_STORE_REMOVE_WATCH,
-                              &in1, sizeof(in1),
+                              &In, sizeof(In),
                               NULL, 0,
-                              &returned,
+                              &Returned,
                               NULL);
 
-    if (!success)
+    if (!Success)
     {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_REMOVE_WATCH failed");
         goto fail;
