@@ -23,6 +23,9 @@
     <ClInclude Include="..\..\include\xencontrol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\xencontrol\xencontrol_private.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\xencontrol\xencontrol.rc">

@@ -46,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\xencontrol.h" />
+    <ClInclude Include="..\..\src\xencontrol\xencontrol_private.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\xencontrol\xencontrol.rc" />
@@ -53,4 +54,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties />
+    </VisualStudio>
+  </ProjectExtensions>
 </Project>
