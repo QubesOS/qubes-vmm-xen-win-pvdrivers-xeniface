@@ -203,7 +203,7 @@ DWORD StoreRemoteRead(PXENCONTROL_CONTEXT xc, ULONG serverPid, USHORT remoteDoma
     return ERROR_SUCCESS;
 }
 
-void XcLogger(XENCONTROL_LOG_LEVEL level, PCHAR function, PWCHAR format, va_list args)
+void XcLogger(XENCONTROL_LOG_LEVEL level, const CHAR *function, const WCHAR *format, va_list args)
 {
     WCHAR buf[1024];
     StringCbVPrintf(buf, sizeof(buf), format, args);

@@ -29,8 +29,8 @@ typedef enum _XENCONTROL_LOG_LEVEL {
 typedef void
 XencontrolLogger(
     IN XENCONTROL_LOG_LEVEL LogLevel,
-    IN const PCHAR Function,
-    IN const PWCHAR Format,
+    IN const CHAR *Function,
+    IN const WCHAR *Format,
     IN va_list Args
     );
 
