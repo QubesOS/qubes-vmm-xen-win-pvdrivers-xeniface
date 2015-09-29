@@ -37,9 +37,9 @@ CsqRemoveIrp(
 
 PIRP
 CsqPeekNextIrp(
-    _In_  PIO_CSQ Csq,
-    _In_  PIRP    Irp,
-    _In_  PVOID   PeekContext // PXENIFACE_CONTEXT_ID
+    _In_      PIO_CSQ Csq,
+    _In_opt_  PIRP    Irp,
+    _In_opt_  PVOID   PeekContext // PXENIFACE_CONTEXT_ID
     )
 {
     PXENIFACE_FDO        Fdo;

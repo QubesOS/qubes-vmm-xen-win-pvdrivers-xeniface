@@ -646,7 +646,6 @@ EvtchnCallback(
     return TRUE;
 }
 
-_IRQL_requires_max_(PASSIVE_LEVEL)
 static
 VOID
 EvtchnFree(
@@ -685,7 +684,7 @@ XenIfaceCleanup(
     KIRQL Irql;
     //LIST_ENTRY ToFree;
 
-    XenIfaceDebugPrint(TRACE, "FO %p\n", FileObject);
+    XenIfaceDebugPrint(TRACE, "FO %p, IRQL %d, Cpu %lu\n", FileObject, KeGetCurrentIrql(), KeGetCurrentProcessorNumber());
 
     // store watches
     KeAcquireSpinLock(&Fdo->StoreWatchLock, &Irql);
@@ -1124,6 +1123,7 @@ fail1:
     return status;
 }
 
+_Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
@@ -1137,6 +1137,7 @@ GnttabAcquireLock(
     KeAcquireSpinLockAtDpcLevel(&Fdo->GnttabCacheLock);
 }
 
+_Releases_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
@@ -1302,6 +1303,10 @@ IoctlGnttabGrantPages(
         goto fail9;
     }
 
+    status = STATUS_UNSUCCESSFUL;
+    if (Context->UserVa == NULL)
+        goto fail10;
+
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n", Context, Irp, Context->KernelVa, Context->UserVa);
     
     // Insert the IRP/context into the pending queue.
@@ -1309,13 +1314,16 @@ IoctlGnttabGrantPages(
     Irp->Tail.Overlay.DriverContext[0] = Context;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
-        goto fail10;
+        goto fail11;
 
     return STATUS_PENDING;
 
+fail11:
+    XenIfaceDebugPrint(ERROR, "Fail11\n");
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
+
 fail10:
     XenIfaceDebugPrint(ERROR, "Fail10\n");
-    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
 
 fail9:
     XenIfaceDebugPrint(ERROR, "Fail9\n");
@@ -1559,6 +1567,10 @@ IoctlGnttabMapForeignPages(
         goto fail9;
     }
 
+    status = STATUS_UNSUCCESSFUL;
+    if (Context->UserVa == NULL)
+        goto fail10;
+
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, Address %p, KernelVa %p, UserVa %p\n",
                        Context, Irp, Context->Address, Context->KernelVa, Context->UserVa);
 
@@ -1567,13 +1579,16 @@ IoctlGnttabMapForeignPages(
     Irp->Tail.Overlay.DriverContext[0] = Context;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
-        goto fail10;
+        goto fail11;
 
     return STATUS_PENDING;
 
+fail11:
+    XenIfaceDebugPrint(ERROR, "Fail11\n");
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
+
 fail10:
     XenIfaceDebugPrint(ERROR, "Fail10\n");
-    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
 
 fail9:
     XenIfaceDebugPrint(ERROR, "Fail9\n");

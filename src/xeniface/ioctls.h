@@ -105,12 +105,14 @@ XenIfaceCleanup(
     PFILE_OBJECT  FileObject
     );
 
+_Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
     __in PVOID Argument
     );
 
+_Releases_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(

@@ -16,9 +16,9 @@ VOID CsqRemoveIrp(
     );
 
 PIRP CsqPeekNextIrp(
-    _In_  PIO_CSQ Csq,
-    _In_  PIRP    Irp,
-    _In_  PVOID   PeekContext
+    _In_      PIO_CSQ Csq,
+    _In_opt_  PIRP    Irp,
+    _In_opt_  PVOID   PeekContext // PXENIFACE_CONTEXT_ID
     );
 
 _IRQL_raises_(DISPATCH_LEVEL)

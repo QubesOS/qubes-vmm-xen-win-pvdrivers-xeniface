@@ -261,6 +261,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         return 1;
     }
 
+#pragma prefast(suppress:28159) // use GetTickCount64
     seed = GetTickCount();
     srand(seed);
     wprintf(L"[*] pid: %lu, seed: %lu\n", pid, seed);
@@ -319,7 +320,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             wprintf(L"%d ", refs[i]);
         }
         wprintf(L"\npress any key to continue\n");
-        getc(stdin);
+        (void)getc(stdin);
 
         ctx.Shm = shm;
         ctx.IsServer = TRUE;
