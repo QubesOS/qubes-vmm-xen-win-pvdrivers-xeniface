@@ -98,7 +98,7 @@ XenIFaceIoctl(
     __in  PIRP              Irp
     );
 
-_IRQL_requires_max_(APC_LEVEL)
+_IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 XenIfaceCleanup(
     PXENIFACE_FDO Fdo,

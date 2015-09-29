@@ -414,22 +414,6 @@ fail1:
     return status;
 }
 
-static
-PIRP
-FindContextIrp(
-    __in  PXENIFACE_FDO Fdo,
-    __in  PXENIFACE_CONTEXT_ID Id
-    )
-{
-    KIRQL Irql;
-    PIRP Irp;
-
-    CsqAcquireLock(&Fdo->IrpQueue, &Irql);
-    Irp = CsqPeekNextIrp(&Fdo->IrpQueue, NULL, Id);
-    CsqReleaseLock(&Fdo->IrpQueue, Irql);
-    return Irp;
-}
-
 static DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreAddWatch(
@@ -515,6 +499,7 @@ fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
 }
+
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static
 VOID
@@ -669,7 +654,7 @@ EvtchnFree(
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 }
 
-_IRQL_requires_max_(APC_LEVEL) // operates on user-mode memory
+_IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 XenIfaceCleanup(
     PXENIFACE_FDO Fdo,
@@ -678,11 +663,8 @@ XenIfaceCleanup(
 {
     PLIST_ENTRY Node;
     PXENIFACE_STORE_CONTEXT StoreContext;
-    //PXENIFACE_GRANT_CONTEXT GrantContext;
-    //PXENIFACE_MAP_CONTEXT MapContext;
     PXENIFACE_EVTCHN_CONTEXT EvtchnContext;
     KIRQL Irql;
-    //LIST_ENTRY ToFree;
 
     XenIfaceDebugPrint(TRACE, "FO %p, IRQL %d, Cpu %lu\n", FileObject, KeGetCurrentIrql(), KeGetCurrentProcessorNumber());
 
@@ -702,62 +684,8 @@ XenIfaceCleanup(
         StoreWatchFree(Fdo, StoreContext);
     }
     KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
-    /*
-    // grants
-    InitializeListHead(&ToFree);
-    KeAcquireSpinLock(&Fdo->GnttabGrantLock, &Irql);
-    Node = Fdo->GnttabGrantList.Flink;
-    while (Node->Flink != Fdo->GnttabGrantList.Flink) {
-        GrantContext = CONTAINING_RECORD(Node, XENIFACE_GRANT_CONTEXT, Entry);
 
-        Node = Node->Flink;
-        if (GrantContext->Id.Process != Process)
-            continue;
-
-        XenIfaceDebugPrint(TRACE, "Grant context %p\n", GrantContext);
-        // can't free/unmap user memory here since locks raise IRQL to DPC_LEVEL
-        RemoveEntryList(&GrantContext->Entry);
-        InsertTailList(&ToFree, &GrantContext->Entry);
-    }
-    KeReleaseSpinLock(&Fdo->GnttabGrantLock, Irql);
-
-    Node = ToFree.Flink;
-    while (Node->Flink != ToFree.Flink) {
-        GrantContext = CONTAINING_RECORD(Node, XENIFACE_GRANT_CONTEXT, Entry);
-        Node = Node->Flink;
-
-        RemoveEntryList(&GrantContext->Entry);
-        GnttabFreeGrant(Fdo, GrantContext);
-    }
-
-    // maps
-    InitializeListHead(&ToFree);
-    KeAcquireSpinLock(&Fdo->GnttabMapLock, &Irql);
-    Node = Fdo->GnttabMapList.Flink;
-    while (Node->Flink != Fdo->GnttabMapList.Flink) {
-        MapContext = CONTAINING_RECORD(Node, XENIFACE_MAP_CONTEXT, Entry);
-
-        Node = Node->Flink;
-        if (MapContext->Id.Process != Process)
-            continue;
-
-        XenIfaceDebugPrint(TRACE, "Map context %p\n", MapContext);
-        // can't free/unmap user memory here since locks raise IRQL to DPC_LEVEL
-        RemoveEntryList(&MapContext->Entry);
-        InsertTailList(&ToFree, &MapContext->Entry);
-    }
-    KeReleaseSpinLock(&Fdo->GnttabMapLock, Irql);
-
-    Node = ToFree.Flink;
-    while (Node->Flink != ToFree.Flink) {
-        MapContext = CONTAINING_RECORD(Node, XENIFACE_MAP_CONTEXT, Entry);
-        Node = Node->Flink;
-
-        RemoveEntryList(&MapContext->Entry);
-        GnttabFreeMap(Fdo, MapContext);
-    }
-    */
-    // event channels, last because grants/maps can use them for unmap notifications
+    // event channels
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     Node = Fdo->EvtchnList.Flink;
     while (Node->Flink != Fdo->EvtchnList.Flink)
@@ -775,7 +703,7 @@ XenIfaceCleanup(
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 }
 
-// EvtchnLock must be held
+_Requires_exclusive_lock_held_(Fdo->EvtchnLock)
 static
 PXENIFACE_EVTCHN_CONTEXT
 EvtchnFindChannel(
@@ -1015,6 +943,7 @@ fail1:
     return status;
 }
 
+_Requires_lock_not_held_(Fdo->EvtchnLock)
 static DECLSPEC_NOINLINE
 NTSTATUS
 EvtchnNotify(
@@ -1148,8 +1077,24 @@ GnttabReleaseLock(
 
     ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
 
-//#pragma prefast(suppress:26110)
     KeReleaseSpinLockFromDpcLevel(&Fdo->GnttabCacheLock);
+}
+
+_Requires_lock_not_held_(Fdo->IrpQueueLock)
+static
+PIRP
+FindContextIrp(
+    __in  PXENIFACE_FDO Fdo,
+    __in  PXENIFACE_CONTEXT_ID Id
+    )
+{
+    KIRQL Irql;
+    PIRP Irp;
+
+    CsqAcquireLock(&Fdo->IrpQueue, &Irql);
+    Irp = CsqPeekNextIrp(&Fdo->IrpQueue, NULL, Id);
+    CsqReleaseLock(&Fdo->IrpQueue, Irql);
+    return Irp;
 }
 
 _IRQL_requires_max_(APC_LEVEL)
