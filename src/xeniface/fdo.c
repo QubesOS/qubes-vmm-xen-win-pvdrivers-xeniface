@@ -2373,13 +2373,13 @@ FdoCreate(
 
     KeInitializeSpinLock(&Fdo->GnttabCacheLock);
 
-    status = IoCsqInitialize(&Fdo->IrpQueue,
-                             CsqInsertIrp,
-                             CsqRemoveIrp,
-                             CsqPeekNextIrp,
-                             CsqAcquireLock,
-                             CsqReleaseLock,
-                             CsqCompleteCanceledIrp);
+    status = IoCsqInitializeEx(&Fdo->IrpQueue,
+                               CsqInsertIrpEx,
+                               CsqRemoveIrp,
+                               CsqPeekNextIrp,
+                               CsqAcquireLock,
+                               CsqReleaseLock,
+                               CsqCompleteCanceledIrp);
     if (!NT_SUCCESS(status))
         goto fail14;
 

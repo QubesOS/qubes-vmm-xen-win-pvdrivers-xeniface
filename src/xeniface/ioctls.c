@@ -1245,6 +1245,10 @@ IoctlGnttabGrantPages(
     XenIfaceDebugPrint(TRACE, "> RemoteDomain %d, NumberPages %lu, Flags 0x%x, Offset 0x%x, Port %d, Process %p, Id %lu\n",
                        Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort, Context->Id.Process, Context->Id.RequestId);
 
+    // Check if the request ID is unique.
+    // This doesn't protect us from simultaneous requests with the same ID arriving here
+    // but another check for duplicate ID is performed when the context/IRP is queued at the end.
+    // Ideally we would lock the whole section but that's not really an option since we touch user memory.
     status = STATUS_INVALID_PARAMETER;
     if (FindContextIrp(Fdo, &Context->Id) != NULL)
         goto fail4;
@@ -1295,16 +1299,26 @@ IoctlGnttabGrantPages(
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
-        goto fail8;
+        goto fail9;
     }
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n", Context, Irp, Context->KernelVa, Context->UserVa);
     
-    // insert the IRP into the pending queue
+    // Insert the IRP/context into the pending queue.
+    // This also checks (again) if the request ID is unique.
     Irp->Tail.Overlay.DriverContext[0] = Context;
-    IoCsqInsertIrp(&Fdo->IrpQueue, Irp, NULL); // also marks the IRP as pending
+    status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
+    if (!NT_SUCCESS(status))
+        goto fail10;
 
     return STATUS_PENDING;
+
+fail10:
+    XenIfaceDebugPrint(ERROR, "Fail10\n");
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
+
+fail9:
+    XenIfaceDebugPrint(ERROR, "Fail9\n");
 
 fail8:
     XenIfaceDebugPrint(ERROR, "Fail8: Page = %lu\n", Page);
@@ -1548,11 +1562,18 @@ IoctlGnttabMapForeignPages(
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, Address %p, KernelVa %p, UserVa %p\n",
                        Context, Irp, Context->Address, Context->KernelVa, Context->UserVa);
 
-    // insert the IRP into the pending queue
+    // Insert the IRP/context into the pending queue.
+    // This also checks (again) if the request ID is unique.
     Irp->Tail.Overlay.DriverContext[0] = Context;
-    IoCsqInsertIrp(&Fdo->IrpQueue, Irp, NULL); // also marks the IRP as pending
+    status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
+    if (!NT_SUCCESS(status))
+        goto fail10;
 
     return STATUS_PENDING;
+
+fail10:
+    XenIfaceDebugPrint(ERROR, "Fail10\n");
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
 
 fail9:
     XenIfaceDebugPrint(ERROR, "Fail9\n");

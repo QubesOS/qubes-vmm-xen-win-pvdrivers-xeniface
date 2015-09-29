@@ -1,19 +1,27 @@
 #include "driver.h"
+#include "irp_queue.h"
 #include "log.h"
 #include "ioctls.h"
 
 // Cancel-safe IRP queue implementation
 
-VOID
-CsqInsertIrp(
+NTSTATUS
+CsqInsertIrpEx(
     _In_  PIO_CSQ Csq,
-    _In_  PIRP    Irp
+    _In_  PIRP    Irp,
+    _In_  PVOID   InsertContext // PXENIFACE_CONTEXT_ID
     )
 {
     PXENIFACE_FDO Fdo;
 
     Fdo = CONTAINING_RECORD(Csq, XENIFACE_FDO, IrpQueue);
+
+    // Fail if a request with the same ID already exists.
+    if (CsqPeekNextIrp(Csq, NULL, InsertContext) != NULL)
+        return STATUS_INVALID_PARAMETER;
+
     InsertTailList(&Fdo->IrpList, &Irp->Tail.Overlay.ListEntry);
+    return STATUS_SUCCESS;
 }
 
 VOID
@@ -31,7 +39,7 @@ PIRP
 CsqPeekNextIrp(
     _In_  PIO_CSQ Csq,
     _In_  PIRP    Irp,
-    _In_  PVOID   PeekContext
+    _In_  PVOID   PeekContext // PXENIFACE_CONTEXT_ID
     )
 {
     PXENIFACE_FDO        Fdo;

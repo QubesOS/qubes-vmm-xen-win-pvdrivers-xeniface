@@ -3,9 +3,11 @@
 
 #include <ntddk.h>
 
-VOID CsqInsertIrp(
+NTSTATUS
+CsqInsertIrpEx(
     _In_  PIO_CSQ Csq,
-    _In_  PIRP    Irp
+    _In_  PIRP    Irp,
+    _In_  PVOID   InsertContext
     );
 
 VOID CsqRemoveIrp(

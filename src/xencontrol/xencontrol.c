@@ -443,6 +443,9 @@ XcGnttabGrantAccess(
 
     FUNCTION_ENTER();
 
+    // lock the whole operation to not generate duplicate IDs
+    EnterCriticalSection(&Xc->RequestListLock);
+
     In1.RequestId = Xc->RequestId;
     In1.RemoteDomain = RemoteDomain;
     In1.NumberPages = NumberPages;
@@ -498,18 +501,12 @@ XcGnttabGrantAccess(
                               &Returned,
                               NULL);
 
-    Status = GetLastError();
-    // FIXME: error handling
-    if (!Success)
-    {
-        Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GET_GRANTS failed");
-        goto fail;
-    }
+    assert(Success);
 
     Request->Address = Out2->Address;
-    EnterCriticalSection(&Xc->RequestListLock);
+
     InsertTailList(&Xc->RequestList, &Request->ListEntry);
-    Xc->RequestId++; // FIXME: synchronization
+    Xc->RequestId++;
     LeaveCriticalSection(&Xc->RequestListLock);
 
     *Address = Out2->Address;
@@ -523,6 +520,7 @@ XcGnttabGrantAccess(
     return ERROR_SUCCESS;
 
 fail:
+    LeaveCriticalSection(&Xc->RequestListLock);
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     free(Out2);
     free(Request);
@@ -606,6 +604,9 @@ XcGnttabMap(
 
     FUNCTION_ENTER();
 
+    // lock the whole operation to not generate duplicate IDs
+    EnterCriticalSection(&Xc->RequestListLock);
+
     Status = ERROR_OUTOFMEMORY;
     Size = sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) + NumberPages * sizeof(ULONG);
     In1 = malloc(Size);
@@ -664,18 +665,11 @@ XcGnttabMap(
                               &Returned,
                               NULL);
 
-    Status = GetLastError();
-    // FIXME: error handling
-    if (!Success)
-    {
-        Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GET_MAP failed");
-        goto fail;
-    }
+    assert(Success);
 
     Request->Address = Out2.Address;
-    EnterCriticalSection(&Xc->RequestListLock);
     InsertTailList(&Xc->RequestList, &Request->ListEntry);
-    Xc->RequestId++; // FIXME: synchronization
+    Xc->RequestId++;
     LeaveCriticalSection(&Xc->RequestListLock);
 
     *Address = Out2.Address;
@@ -687,6 +681,7 @@ XcGnttabMap(
     return ERROR_SUCCESS;
 
 fail:
+    LeaveCriticalSection(&Xc->RequestListLock);
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     free(In1);
     free(Request);
