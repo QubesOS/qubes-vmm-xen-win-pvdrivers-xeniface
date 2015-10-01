@@ -115,6 +115,13 @@ XenIfaceCleanup(
     PFILE_OBJECT  FileObject
     );
 
+_Function_class_(IO_WORKITEM_ROUTINE)
+VOID
+CompleteGnttabIrp(
+    __in      PDEVICE_OBJECT DeviceObject,
+    __in_opt  PVOID          Context
+    );
+
 _Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID

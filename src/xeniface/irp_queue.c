@@ -125,27 +125,12 @@ CsqCompleteCanceledIrp(
     )
 {
     PXENIFACE_FDO Fdo = CONTAINING_RECORD(Csq, XENIFACE_FDO, IrpQueue);
-    PXENIFACE_CONTEXT_ID Id = Irp->Tail.Overlay.DriverContext[0];
+    PIO_WORKITEM WorkItem;
 
-    XenIfaceDebugPrint(TRACE, "Irp %p, Context %p, Process %p, Id %lu, Type %d, IRQL %d\n",
-                       Irp, Id, Id->Process, Id->RequestId, Id->Type, KeGetCurrentIrql());
+    XenIfaceDebugPrint(TRACE, "Irp %p, IRQL %d\n",
+                       Irp, KeGetCurrentIrql());
 
-    switch (Id->Type)
-    {
-    case XENIFACE_CONTEXT_GRANT:
-        GnttabFreeGrant(Fdo, (PXENIFACE_GRANT_CONTEXT)Id);
-        break;
-
-    case XENIFACE_CONTEXT_MAP:
-        GnttabFreeMap(Fdo, (PXENIFACE_MAP_CONTEXT)Id);
-        break;
-
-    default:
-        ASSERT(FALSE);
-
-    }
-
-    Irp->IoStatus.Status = STATUS_CANCELLED;
-    Irp->IoStatus.Information = 0;
-    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    WorkItem = IoAllocateWorkItem(Fdo->Dx->DeviceObject);
+    Irp->Tail.Overlay.DriverContext[1] = WorkItem; // store so the work item proc can free it
+    IoQueueWorkItem(WorkItem, CompleteGnttabIrp, DelayedWorkQueue, Irp);
 }

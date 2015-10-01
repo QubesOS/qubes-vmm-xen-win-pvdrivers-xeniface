@@ -721,6 +721,48 @@ XenIfaceCleanup(
     }
 }
 
+_Function_class_(IO_WORKITEM_ROUTINE)
+VOID
+CompleteGnttabIrp(
+    __in      PDEVICE_OBJECT DeviceObject,
+    __in_opt  PVOID          Context
+    )
+{
+    PXENIFACE_DX Dx = (PXENIFACE_DX)DeviceObject->DeviceExtension;
+    PXENIFACE_FDO Fdo = Dx->Fdo;
+    PIRP Irp = Context;
+    PXENIFACE_CONTEXT_ID Id;
+    PIO_WORKITEM WorkItem;
+
+    ASSERT(Context != NULL);
+
+    Id = Irp->Tail.Overlay.DriverContext[0];
+    WorkItem = Irp->Tail.Overlay.DriverContext[1];
+
+    XenIfaceDebugPrint(TRACE, "Irp %p, Process %p, Id %lu, Type %d, IRQL %d\n",
+                       Irp, Id->Process, Id->RequestId, Id->Type, KeGetCurrentIrql());
+
+    switch (Id->Type)
+    {
+    case XENIFACE_CONTEXT_GRANT:
+        GnttabFreeGrant(Fdo, CONTAINING_RECORD(Id, XENIFACE_GRANT_CONTEXT, Id));
+        break;
+
+    case XENIFACE_CONTEXT_MAP:
+        GnttabFreeMap(Fdo, CONTAINING_RECORD(Id, XENIFACE_MAP_CONTEXT, Id));
+        break;
+
+    default:
+        ASSERT(FALSE);
+    }
+
+    IoFreeWorkItem(WorkItem);
+
+    Irp->IoStatus.Status = STATUS_CANCELLED;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+}
+
 _Requires_exclusive_lock_held_(Fdo->EvtchnLock)
 static
 PXENIFACE_EVTCHN_CONTEXT
@@ -1272,7 +1314,7 @@ IoctlGnttabGrantPages(
     
     // Insert the IRP/context into the pending queue.
     // This also checks (again) if the request ID is unique.
-    Irp->Tail.Overlay.DriverContext[0] = Context;
+    Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
         goto fail11;
@@ -1346,6 +1388,7 @@ IoctlGnttabGetGrants(
     XENIFACE_CONTEXT_ID Id;
     KIRQL Irql;
     PIRP Irp;
+    PXENIFACE_CONTEXT_ID ContextId;
     PXENIFACE_GRANT_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
@@ -1365,7 +1408,8 @@ IoctlGnttabGetGrants(
     if (Irp == NULL)
         goto fail2;
 
-    Context = Irp->Tail.Overlay.DriverContext[0];
+    ContextId = Irp->Tail.Overlay.DriverContext[0];
+    Context = CONTAINING_RECORD(ContextId, XENIFACE_GRANT_CONTEXT, Id);
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (OutLen != (sizeof(GNTTAB_GET_GRANTS_OUT) + sizeof(ULONG) * Context->NumberPages))
@@ -1410,6 +1454,7 @@ IoctlGnttabUngrantPages(
     PXENIFACE_GRANT_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;
+    PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(GNTTAB_UNGRANT_PAGES_IN))
@@ -1426,7 +1471,8 @@ IoctlGnttabUngrantPages(
     if (PendingIrp == NULL)
         goto fail2;
 
-    Context = PendingIrp->Tail.Overlay.DriverContext[0];
+    ContextId = PendingIrp->Tail.Overlay.DriverContext[0];
+    Context = CONTAINING_RECORD(ContextId, XENIFACE_GRANT_CONTEXT, Id);
     GnttabFreeGrant(Fdo, Context);
 
     PendingIrp->IoStatus.Status = STATUS_SUCCESS;
@@ -1537,7 +1583,7 @@ IoctlGnttabMapForeignPages(
 
     // Insert the IRP/context into the pending queue.
     // This also checks (again) if the request ID is unique.
-    Irp->Tail.Overlay.DriverContext[0] = Context;
+    Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
         goto fail11;
@@ -1605,6 +1651,7 @@ IoctlGnttabGetMap(
     KIRQL Irql;
     PIRP Irp;
     PXENIFACE_MAP_CONTEXT Context;
+    PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(GNTTAB_GET_MAP_IN) || OutLen != sizeof(GNTTAB_GET_MAP_OUT))
@@ -1623,7 +1670,8 @@ IoctlGnttabGetMap(
     if (Irp == NULL)
         goto fail2;
 
-    Context = Irp->Tail.Overlay.DriverContext[0];
+    ContextId = Irp->Tail.Overlay.DriverContext[0];
+    Context = CONTAINING_RECORD(ContextId, XENIFACE_MAP_CONTEXT, Id);
 
     Out->Address = Context->UserVa;
     XenIfaceDebugPrint(TRACE, "< Address %p, Irp %p\n", Context->UserVa, Irp);
@@ -1699,6 +1747,7 @@ IoctlGnttabUnmapForeignPages(
     PXENIFACE_MAP_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;
+    PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(GNTTAB_UNMAP_FOREIGN_PAGES_IN) && OutLen != 0)
@@ -1715,7 +1764,8 @@ IoctlGnttabUnmapForeignPages(
     if (PendingIrp == NULL)
         goto fail2;
 
-    Context = PendingIrp->Tail.Overlay.DriverContext[0];
+    ContextId = PendingIrp->Tail.Overlay.DriverContext[0];
+    Context = CONTAINING_RECORD(ContextId, XENIFACE_MAP_CONTEXT, Id);
     GnttabFreeMap(Fdo, Context);
 
     PendingIrp->IoStatus.Status = STATUS_SUCCESS;
