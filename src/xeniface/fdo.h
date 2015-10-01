@@ -89,6 +89,7 @@ typedef struct _XENIFACE_FDO {
 
     KSPIN_LOCK                      EvtchnLock;
     LIST_ENTRY                      EvtchnList;
+    PKDPC                           EvtchnDpc;
 
     KSPIN_LOCK                      GnttabCacheLock;
 

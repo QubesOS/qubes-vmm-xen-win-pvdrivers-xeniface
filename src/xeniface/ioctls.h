@@ -58,7 +58,6 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
     PXENBUS_EVTCHN_CHANNEL Channel;
     ULONG                  LocalPort;
     PKEVENT                Event;
-    KDPC                   Dpc;
     PXENIFACE_FDO          Fdo;
     BOOLEAN                Active;
     PVOID                  FileObject;
@@ -98,7 +97,18 @@ XenIFaceIoctl(
     __in  PIRP              Irp
     );
 
-_IRQL_requires_max_(DISPATCH_LEVEL)
+_Function_class_(KDEFERRED_ROUTINE)
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_requires_same_
+VOID
+EvtchnDpc(
+    __in     PKDPC Dpc,
+    __in_opt PVOID Context,
+    __in_opt PVOID Argument1,
+    __in_opt PVOID Argument2
+    );
+
+_IRQL_requires_(PASSIVE_LEVEL)
 VOID
 XenIfaceCleanup(
     PXENIFACE_FDO Fdo,

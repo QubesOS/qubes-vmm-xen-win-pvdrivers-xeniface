@@ -578,7 +578,6 @@ fail1:
 _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
-static
 VOID
 EvtchnDpc(
     __in     PKDPC Dpc,
@@ -587,13 +586,13 @@ EvtchnDpc(
     __in_opt PVOID Argument2
     )
 {
-    PXENIFACE_EVTCHN_CONTEXT Ctx = (PXENIFACE_EVTCHN_CONTEXT)Context;
+    PXENIFACE_EVTCHN_CONTEXT Ctx = (PXENIFACE_EVTCHN_CONTEXT)Argument1;
 
     UNREFERENCED_PARAMETER(Dpc);
-    UNREFERENCED_PARAMETER(Argument1);
+    UNREFERENCED_PARAMETER(Context);
     UNREFERENCED_PARAMETER(Argument2);
 
-    ASSERT(Context);
+    ASSERT(Ctx);
 
 #if DBG
     XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, Active %d, Cpu %lu\n",
@@ -620,17 +619,22 @@ EvtchnCallback(
     )
 {
     PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument;
+    PROCESSOR_NUMBER ProcNumber;
+    ULONG ProcIndex;
 
     UNREFERENCED_PARAMETER(Interrupt);
     ASSERT(Context);
 
+    KeGetCurrentProcessorNumberEx(&ProcNumber);
+    ProcIndex = KeGetProcessorIndexFromNumber(&ProcNumber);
     // we're running at high irql, queue a dpc to signal the event
     if (Context->Active)
-        KeInsertQueueDpc(&Context->Dpc, NULL, NULL);
+        KeInsertQueueDpc(&Context->Fdo->EvtchnDpc[ProcIndex], Context, NULL);
 
     return TRUE;
 }
 
+_IRQL_requires_(PASSIVE_LEVEL) // needed for KeFlushQueuedDpcs
 static
 VOID
 EvtchnFree(
@@ -638,23 +642,27 @@ EvtchnFree(
     __in PXENIFACE_EVTCHN_CONTEXT Context
     )
 {
+    ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
+
     XenIfaceDebugPrint(TRACE, "Context %p, LocalPort %d, FO %p\n",
                        Context, Context->LocalPort, Context->FileObject);
+
+    InterlockedExchange8(&Context->Active, 0);
 
     XENBUS_EVTCHN(Close,
                   &Fdo->EvtchnInterface,
                   Context->Channel);
 
-    InterlockedExchange8(&Context->Active, 0);
-    // Wait for our DPCs to complete
-    KeFlushQueuedDpcs(); // FIXME
+    // There may still be a pending event at this time.
+    // Wait for our DPCs to complete.
+    KeFlushQueuedDpcs();
 
     ObDereferenceObject(Context->Event);
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 }
 
-_IRQL_requires_max_(DISPATCH_LEVEL)
+_IRQL_requires_(PASSIVE_LEVEL) // EvtchnFree calls KeFlushQueuedDpcs
 VOID
 XenIfaceCleanup(
     PXENIFACE_FDO Fdo,
@@ -665,14 +673,14 @@ XenIfaceCleanup(
     PXENIFACE_STORE_CONTEXT StoreContext;
     PXENIFACE_EVTCHN_CONTEXT EvtchnContext;
     KIRQL Irql;
+    LIST_ENTRY ToFree;
 
     XenIfaceDebugPrint(TRACE, "FO %p, IRQL %d, Cpu %lu\n", FileObject, KeGetCurrentIrql(), KeGetCurrentProcessorNumber());
 
     // store watches
     KeAcquireSpinLock(&Fdo->StoreWatchLock, &Irql);
     Node = Fdo->StoreWatchList.Flink;
-    while (Node->Flink != Fdo->StoreWatchList.Flink)
-    {
+    while (Node->Flink != Fdo->StoreWatchList.Flink) {
         StoreContext = CONTAINING_RECORD(Node, XENIFACE_STORE_CONTEXT, Entry);
 
         Node = Node->Flink;
@@ -686,10 +694,10 @@ XenIfaceCleanup(
     KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
 
     // event channels
+    InitializeListHead(&ToFree);
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
     Node = Fdo->EvtchnList.Flink;
-    while (Node->Flink != Fdo->EvtchnList.Flink)
-    {
+    while (Node->Flink != Fdo->EvtchnList.Flink) {
         EvtchnContext = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
 
         Node = Node->Flink;
@@ -698,9 +706,19 @@ XenIfaceCleanup(
 
         XenIfaceDebugPrint(TRACE, "Evtchn context %p\n", EvtchnContext);
         RemoveEntryList(&EvtchnContext->Entry);
-        EvtchnFree(Fdo, EvtchnContext);
+        // EvtchnFree requires PASSIVE_LEVEL and we're inside a lock
+        InsertTailList(&ToFree, &EvtchnContext->Entry);
     }
     KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
+    Node = ToFree.Flink;
+    while (Node->Flink != ToFree.Flink) {
+        EvtchnContext = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
+        Node = Node->Flink;
+
+        RemoveEntryList(&EvtchnContext->Entry);
+        EvtchnFree(Fdo, EvtchnContext);
+    }
 }
 
 _Requires_exclusive_lock_held_(Fdo->EvtchnLock)
@@ -784,7 +802,6 @@ IoctlEvtchnBindUnboundPort(
                                        Context->Channel);
 
     Context->Fdo = Fdo;
-    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
@@ -868,7 +885,6 @@ IoctlEvtchnBindInterdomain(
                                        Context->Channel);
 
     Context->Fdo = Fdo;
-    KeInitializeDpc(&Context->Dpc, EvtchnDpc, Context);
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
