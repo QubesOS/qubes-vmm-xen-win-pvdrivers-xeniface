@@ -18,7 +18,8 @@ extern "C" {
 struct _XENCONTROL_CONTEXT;
 typedef struct _XENCONTROL_CONTEXT *PXENCONTROL_CONTEXT;
 
-typedef enum _XENCONTROL_LOG_LEVEL {
+typedef enum
+_XENCONTROL_LOG_LEVEL {
     XLL_ERROR = 1,
     XLL_WARNING,
     XLL_INFO,
@@ -105,40 +106,40 @@ XcEvtchnUnmask(
 
 XENCONTROL_API
 DWORD
-XcGnttabGrantAccess(
+XcGnttabPermitForeignAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  ULONG NotifyOffset,
     IN  ULONG NotifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    IN  XENIFACE_GNTTAB_PAGE_FLAGS Flags,
     OUT PVOID *Address,
     OUT ULONG *References
     );
 
 XENCONTROL_API
 DWORD
-XcGnttabRevokeAccess(
+XcGnttabRevokeForeignAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );
 
 XENCONTROL_API
 DWORD
-XcGnttabMap(
+XcGnttabMapForeignPages(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  PULONG References,
     IN  ULONG NotifyOffset,
     IN  ULONG NotifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    IN  XENIFACE_GNTTAB_PAGE_FLAGS Flags,
     OUT PVOID *Address
     );
 
 XENCONTROL_API
 DWORD
-XcGnttabUnmap(
+XcGnttabUnmapForeignPages(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     );

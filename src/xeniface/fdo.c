@@ -2117,7 +2117,7 @@ FdoDispatch(
         break;
 
     case IRP_MJ_DEVICE_CONTROL:
-        status = XenIFaceIoctl(Fdo, Irp);
+        status = XenIfaceIoctl(Fdo, Irp);
         break;
 
     case IRP_MJ_SYSTEM_CONTROL:
@@ -2395,7 +2395,7 @@ FdoCreate(
 
         status = KeGetProcessorNumberFromIndex(i, &ProcNumber);
         ASSERT(NT_SUCCESS(status));
-        KeInitializeDpc(&Fdo->EvtchnDpc[i], EvtchnDpc, NULL);
+        KeInitializeDpc(&Fdo->EvtchnDpc[i], EvtchnNotificationDpc, NULL);
         status = KeSetTargetProcessorDpcEx(&Fdo->EvtchnDpc[i], &ProcNumber);
         ASSERT(NT_SUCCESS(status));
     }

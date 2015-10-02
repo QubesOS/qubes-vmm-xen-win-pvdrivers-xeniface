@@ -270,12 +270,12 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
         wprintf(L"[*] local event port: %lu\n", localPort);
         wprintf(L"[*] granting %lu pages to remote domain %u\n", numPages, ctx.RemoteDomain);
-        status = XcGnttabGrantAccess(xc,
+        status = XcGnttabPermitForeignAccess(xc,
                                      ctx.RemoteDomain,
                                      numPages,
                                      FIELD_OFFSET(SHARED_MEM, ServerFlag),
                                      localPort,
-                                     GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
+                                     XENIFACE_GNTTAB_USE_NOTIFY_OFFSET | XENIFACE_GNTTAB_USE_NOTIFY_PORT,
                                      &shm,
                                      refs);
         if (status != ERROR_SUCCESS) {
@@ -332,7 +332,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ReadShm(shm);
 
         wprintf(L"[*] ungranting address %p\n", shm);
-        status = XcGnttabRevokeAccess(xc, shm);
+        status = XcGnttabRevokeForeignAccess(xc, shm);
         if (status != ERROR_SUCCESS) {
             wprintf(L"[!] XcGnttabRevokeAccess failed: 0x%x\n", status);
             return 1;
@@ -343,7 +343,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         refs[0] = _wtoi(argv[2]);
         wprintf(L"[*] performing initial one-page map: remote domain %d, ref %lu\n", ctx.RemoteDomain, refs[0]);
 
-        status = XcGnttabMap(xc,
+        status = XcGnttabMapForeignPages(xc,
                              ctx.RemoteDomain,
                              1,
                              refs,
@@ -381,20 +381,20 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         wprintf(L"[*] local event port: %lu, remapping the full region\n", localPort);
 
         // unmap
-        status = XcGnttabUnmap(xc, shm);
+        status = XcGnttabUnmapForeignPages(xc, shm);
         if (status != ERROR_SUCCESS) {
             wprintf(L"[!] XcGnttabUnmap failed: 0x%x\n", status);
             return 1;
         }
 
         // map the full range with notifications
-        status = XcGnttabMap(xc,
+        status = XcGnttabMapForeignPages(xc,
                              ctx.RemoteDomain,
                              numPages,
                              refs,
                              FIELD_OFFSET(SHARED_MEM, ClientFlag),
                              localPort,
-                             GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET | GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT,
+                             XENIFACE_GNTTAB_USE_NOTIFY_OFFSET | XENIFACE_GNTTAB_USE_NOTIFY_PORT,
                              &shm);
         if (status != ERROR_SUCCESS) {
             wprintf(L"[!] XcGnttabMap failed: 0x%x\n", status);
@@ -437,7 +437,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
         // final unmap
         wprintf(L"[*] unmapping address %p\n", shm);;
-        status = XcGnttabUnmap(xc, shm);
+        status = XcGnttabUnmapForeignPages(xc, shm);
         if (status != ERROR_SUCCESS) {
             wprintf(L"[!] XcGnttabUnmap failed: 0x%x\n", status);
             return 1;

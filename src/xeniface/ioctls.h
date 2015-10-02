@@ -36,7 +36,7 @@
 #include "xeniface_ioctls.h"
 
 typedef enum _XENIFACE_CONTEXT_TYPE {
-    XENIFACE_CONTEXT_GRANT,
+    XENIFACE_CONTEXT_GRANT = 1,
     XENIFACE_CONTEXT_MAP
 } XENIFACE_CONTEXT_TYPE;
 
@@ -64,35 +64,35 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 
 typedef struct _XENIFACE_GRANT_CONTEXT {
-    XENIFACE_CONTEXT_ID      Id;
-    LIST_ENTRY               Entry;
-    PXENBUS_GNTTAB_ENTRY     *Grants;
-    USHORT                   RemoteDomain;
-    ULONG                    NumberPages;
-    GNTTAB_GRANT_PAGES_FLAGS Flags;
-    ULONG                    NotifyOffset;
-    ULONG                    NotifyPort;
-    PVOID                    KernelVa;
-    PVOID                    UserVa;
-    PMDL                     Mdl;
+    XENIFACE_CONTEXT_ID        Id;
+    LIST_ENTRY                 Entry;
+    PXENBUS_GNTTAB_ENTRY       *Grants;
+    USHORT                     RemoteDomain;
+    ULONG                      NumberPages;
+    XENIFACE_GNTTAB_PAGE_FLAGS Flags;
+    ULONG                      NotifyOffset;
+    ULONG                      NotifyPort;
+    PVOID                      KernelVa;
+    PVOID                      UserVa;
+    PMDL                       Mdl;
 } XENIFACE_GRANT_CONTEXT, *PXENIFACE_GRANT_CONTEXT;
 
 typedef struct _XENIFACE_MAP_CONTEXT {
-    XENIFACE_CONTEXT_ID      Id;
-    LIST_ENTRY               Entry;
-    USHORT                   RemoteDomain;
-    ULONG                    NumberPages;
-    GNTTAB_GRANT_PAGES_FLAGS Flags;
-    ULONG                    NotifyOffset;
-    ULONG                    NotifyPort;
-    PHYSICAL_ADDRESS         Address;
-    PVOID                    KernelVa;
-    PVOID                    UserVa;
-    PMDL                     Mdl;
+    XENIFACE_CONTEXT_ID        Id;
+    LIST_ENTRY                 Entry;
+    USHORT                     RemoteDomain;
+    ULONG                      NumberPages;
+    XENIFACE_GNTTAB_PAGE_FLAGS Flags;
+    ULONG                      NotifyOffset;
+    ULONG                      NotifyPort;
+    PHYSICAL_ADDRESS           Address;
+    PVOID                      KernelVa;
+    PVOID                      UserVa;
+    PMDL                       Mdl;
 } XENIFACE_MAP_CONTEXT, *PXENIFACE_MAP_CONTEXT;
 
 NTSTATUS
-XenIFaceIoctl(
+XenIfaceIoctl(
     __in  PXENIFACE_FDO     Fdo,
     __in  PIRP              Irp
     );
@@ -101,7 +101,7 @@ _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
 VOID
-EvtchnDpc(
+EvtchnNotificationDpc(
     __in     PKDPC Dpc,
     __in_opt PVOID Context,
     __in_opt PVOID Argument1,

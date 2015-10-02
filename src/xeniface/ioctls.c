@@ -40,10 +40,10 @@
 
 static
 NTSTATUS
-CaptureBuffer(
-    IN  PVOID Buffer,
-    IN  ULONG Length,
-    OUT PVOID *CapturedBuffer
+__CaptureUserBuffer(
+    __in  PVOID Buffer,
+    __in  ULONG Length,
+    __out PVOID *CapturedBuffer
     )
 {
     NTSTATUS Status;
@@ -79,8 +79,8 @@ CaptureBuffer(
 
 static
 VOID
-FreeCapturedBuffer(
-    IN  PVOID CapturedBuffer
+__FreeCapturedBuffer(
+    __in  PVOID CapturedBuffer
     )
 {
     if (CapturedBuffer != NULL) {
@@ -356,22 +356,22 @@ IoctlStoreSetPermissions(
     )
 {
     NTSTATUS status;
-    PSTORE_SET_PERMISSIONS_IN In = (PSTORE_SET_PERMISSIONS_IN)Buffer;
+    PXENIFACE_STORE_SET_PERMISSIONS_IN In = (PXENIFACE_STORE_SET_PERMISSIONS_IN)Buffer;
     ULONG Index;
     PCHAR Path;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) || OutLen != 0)
+    if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) || OutLen != 0)
         goto fail1;
 
-    if (InLen < sizeof(STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
+    if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
         goto fail2;
 
     status = STATUS_INVALID_PARAMETER;
     if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
         goto fail3;
 
-    status = CaptureBuffer(In->Path, In->PathLength, &Path);
+    status = __CaptureUserBuffer(In->Path, In->PathLength, &Path);
     if (!NT_SUCCESS(status))
         goto fail4;
 
@@ -380,7 +380,7 @@ IoctlStoreSetPermissions(
 
     for (Index = 0; Index < In->NumberPermissions; Index++) {
         XenIfaceDebugPrint(TRACE, "> %lu: Domain %d, Mask 0x%x\n", Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
-        if ((In->Permissions[Index].Mask & ~XENBUS_STORE_ALLOWED_PERMISSIONS) != 0)
+        if ((In->Permissions[Index].Mask & ~XENIFACE_STORE_ALLOWED_PERMISSIONS) != 0)
             goto fail5;
     }
 
@@ -395,14 +395,14 @@ IoctlStoreSetPermissions(
     if (!NT_SUCCESS(status))
         goto fail6;
 
-    FreeCapturedBuffer(Path);
+    __FreeCapturedBuffer(Path);
     return status;
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
-    FreeCapturedBuffer(Path);
+    __FreeCapturedBuffer(Path);
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
 fail3:
@@ -426,20 +426,20 @@ IoctlStoreAddWatch(
     )
 {
     NTSTATUS status;
-    PSTORE_ADD_WATCH_IN In = (PSTORE_ADD_WATCH_IN)Buffer;
-    PSTORE_ADD_WATCH_OUT Out = (PSTORE_ADD_WATCH_OUT)Buffer;
+    PXENIFACE_STORE_ADD_WATCH_IN In = (PXENIFACE_STORE_ADD_WATCH_IN)Buffer;
+    PXENIFACE_STORE_ADD_WATCH_OUT Out = (PXENIFACE_STORE_ADD_WATCH_OUT)Buffer;
     PCHAR Path;
     PXENIFACE_STORE_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(STORE_ADD_WATCH_IN) || OutLen != sizeof(STORE_ADD_WATCH_OUT))
+    if (InLen != sizeof(XENIFACE_STORE_ADD_WATCH_IN) || OutLen != sizeof(XENIFACE_STORE_ADD_WATCH_OUT))
         goto fail1;
 
     status = STATUS_INVALID_PARAMETER;
     if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
         goto fail2;
 
-    status = CaptureBuffer(In->Path, In->PathLength, &Path);
+    status = __CaptureUserBuffer(In->Path, In->PathLength, &Path);
     if (!NT_SUCCESS(status))
         goto fail3;
 
@@ -470,14 +470,14 @@ IoctlStoreAddWatch(
     if (!NT_SUCCESS(status))
         goto fail6;
 
-    FreeCapturedBuffer(Path);
+    __FreeCapturedBuffer(Path);
 
     ExInterlockedInsertTailList(&Fdo->StoreWatchList, &Context->Entry, &Fdo->StoreWatchLock);
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Watch %p\n", Context, Context->Watch);
 
     Out->Context = Context;
-    *Info = sizeof(STORE_ADD_WATCH_OUT);
+    *Info = sizeof(XENIFACE_STORE_ADD_WATCH_OUT);
 
     return status;
 
@@ -490,7 +490,7 @@ fail5:
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
-    FreeCapturedBuffer(Path);
+    __FreeCapturedBuffer(Path);
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
 fail2:
@@ -503,9 +503,9 @@ fail1:
 _IRQL_requires_max_(DISPATCH_LEVEL)
 static
 VOID
-StoreWatchFree(
-    __in PXENIFACE_FDO Fdo,
-    __in PXENIFACE_STORE_CONTEXT Context
+StoreFreeWatch(
+    __in  PXENIFACE_FDO Fdo,
+    __in  PXENIFACE_STORE_CONTEXT Context
     )
 {
     NTSTATUS status;
@@ -535,13 +535,13 @@ IoctlStoreRemoveWatch(
     )
 {
     NTSTATUS status;
-    PSTORE_REMOVE_WATCH_IN In = (PSTORE_REMOVE_WATCH_IN)Buffer;
+    PXENIFACE_STORE_REMOVE_WATCH_IN In = (PXENIFACE_STORE_REMOVE_WATCH_IN)Buffer;
     PXENIFACE_STORE_CONTEXT Context = NULL;
     KIRQL Irql;
     PLIST_ENTRY Node;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(STORE_REMOVE_WATCH_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_STORE_REMOVE_WATCH_IN) || OutLen != 0)
         goto fail1;
 
     XenIfaceDebugPrint(TRACE, "> Context %p, FO %p\n", In->Context, FileObject);
@@ -564,7 +564,7 @@ IoctlStoreRemoveWatch(
     if (Context == NULL || Context != In->Context)
         goto fail2;
 
-    StoreWatchFree(Fdo, Context);
+    StoreFreeWatch(Fdo, Context);
 
     return STATUS_SUCCESS;
 
@@ -579,31 +579,31 @@ _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
 VOID
-EvtchnDpc(
+EvtchnNotificationDpc(
     __in     PKDPC Dpc,
-    __in_opt PVOID Context,
+    __in_opt PVOID _Context,
     __in_opt PVOID Argument1,
     __in_opt PVOID Argument2
     )
 {
-    PXENIFACE_EVTCHN_CONTEXT Ctx = (PXENIFACE_EVTCHN_CONTEXT)Argument1;
+    PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument1;
 
     UNREFERENCED_PARAMETER(Dpc);
-    UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(_Context);
     UNREFERENCED_PARAMETER(Argument2);
 
-    ASSERT(Ctx);
+    ASSERT(Context);
 
 #if DBG
     XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, Active %d, Cpu %lu\n",
-                       Ctx->Channel, Ctx->LocalPort, Ctx->Active, KeGetCurrentProcessorNumber());
+                       Context->Channel, Context->LocalPort, Context->Active, KeGetCurrentProcessorNumber());
 #endif
-    if (Ctx->Active) {
-        KeSetEvent(Ctx->Event, 0, FALSE);
+    if (Context->Active) {
+        KeSetEvent(Context->Event, 0, FALSE);
 
         XENBUS_EVTCHN(Unmask,
-                      &Ctx->Fdo->EvtchnInterface,
-                      Ctx->Channel,
+                      &Context->Fdo->EvtchnInterface,
+                      Context->Channel,
                       FALSE);
     }
 }
@@ -613,7 +613,7 @@ _IRQL_requires_(HIGH_LEVEL)
 _IRQL_requires_same_
 static DECLSPEC_NOINLINE
 BOOLEAN
-EvtchnCallback(
+EvtchnInterruptHandler(
     __in     PKINTERRUPT Interrupt,
     __in_opt PVOID Argument
     )
@@ -662,6 +662,7 @@ EvtchnFree(
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 }
 
+// Cleanup store watches and event channels, called on file object close.
 _IRQL_requires_(PASSIVE_LEVEL) // EvtchnFree calls KeFlushQueuedDpcs
 VOID
 XenIfaceCleanup(
@@ -689,7 +690,7 @@ XenIfaceCleanup(
 
         XenIfaceDebugPrint(TRACE, "Store context %p\n", StoreContext);
         RemoveEntryList(&StoreContext->Entry);
-        StoreWatchFree(Fdo, StoreContext);
+        StoreFreeWatch(Fdo, StoreContext);
     }
     KeReleaseSpinLock(&Fdo->StoreWatchLock, Irql);
 
@@ -721,6 +722,7 @@ XenIfaceCleanup(
     }
 }
 
+// Complete a canceled gnttab IRP, cleanup associated grant/map.
 _Function_class_(IO_WORKITEM_ROUTINE)
 VOID
 CompleteGnttabIrp(
@@ -795,7 +797,7 @@ EvtchnFindChannel(
 
 static DECLSPEC_NOINLINE
 NTSTATUS
-IoctlEvtchnBindUnboundPort(
+IoctlEvtchnBindUnbound(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -805,12 +807,12 @@ IoctlEvtchnBindUnboundPort(
     )
 {
     NTSTATUS status;
-    PEVTCHN_BIND_UNBOUND_PORT_IN In = (PEVTCHN_BIND_UNBOUND_PORT_IN)Buffer;
-    PEVTCHN_BIND_UNBOUND_PORT_OUT Out = (PEVTCHN_BIND_UNBOUND_PORT_OUT)Buffer;
+    PXENIFACE_EVTCHN_BIND_UNBOUND_IN In = (PXENIFACE_EVTCHN_BIND_UNBOUND_IN)Buffer;
+    PXENIFACE_EVTCHN_BIND_UNBOUND_OUT Out = (PXENIFACE_EVTCHN_BIND_UNBOUND_OUT)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_IN) || OutLen != sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT))
+    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_IN) || OutLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_OUT))
         goto fail1;
 
     status = STATUS_NO_MEMORY;
@@ -832,7 +834,7 @@ IoctlEvtchnBindUnboundPort(
     Context->Channel = XENBUS_EVTCHN(Open,
                                      &Fdo->EvtchnInterface,
                                      XENBUS_EVTCHN_TYPE_UNBOUND,
-                                     EvtchnCallback,
+                                     EvtchnInterruptHandler,
                                      Context,
                                      In->RemoteDomain,
                                      TRUE);
@@ -849,7 +851,7 @@ IoctlEvtchnBindUnboundPort(
 
     InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
-    *Info = sizeof(EVTCHN_BIND_UNBOUND_PORT_OUT);
+    *Info = sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_OUT);
 
     if (!In->Mask) {
         XENBUS_EVTCHN(Unmask,
@@ -887,12 +889,12 @@ IoctlEvtchnBindInterdomain(
     )
 {
     NTSTATUS status;
-    PEVTCHN_BIND_INTERDOMAIN_IN In = (PEVTCHN_BIND_INTERDOMAIN_IN)Buffer;
-    PEVTCHN_BIND_INTERDOMAIN_OUT Out = (PEVTCHN_BIND_INTERDOMAIN_OUT)Buffer;
+    PXENIFACE_EVTCHN_BIND_INTERDOMAIN_IN In = (PXENIFACE_EVTCHN_BIND_INTERDOMAIN_IN)Buffer;
+    PXENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT Out = (PXENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_BIND_INTERDOMAIN_IN) || OutLen != sizeof(EVTCHN_BIND_INTERDOMAIN_OUT))
+    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_IN) || OutLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT))
         goto fail1;
 
     status = STATUS_NO_MEMORY;
@@ -914,7 +916,7 @@ IoctlEvtchnBindInterdomain(
     Context->Channel = XENBUS_EVTCHN(Open,
                                      &Fdo->EvtchnInterface,
                                      XENBUS_EVTCHN_TYPE_INTER_DOMAIN,
-                                     EvtchnCallback,
+                                     EvtchnInterruptHandler,
                                      Context,
                                      In->RemoteDomain,
                                      In->RemotePort,
@@ -932,7 +934,7 @@ IoctlEvtchnBindInterdomain(
 
     InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
-    *Info = sizeof(EVTCHN_BIND_INTERDOMAIN_OUT);
+    *Info = sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT);
 
     if (!In->Mask) {
         XENBUS_EVTCHN(Unmask,
@@ -970,12 +972,12 @@ IoctlEvtchnClose(
     )
 {
     NTSTATUS status;
-    PEVTCHN_CLOSE_IN In = (PEVTCHN_CLOSE_IN)Buffer;
+    PXENIFACE_EVTCHN_CLOSE_IN In = (PXENIFACE_EVTCHN_CLOSE_IN)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context = NULL;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_CLOSE_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_CLOSE_IN) || OutLen != 0)
         goto fail1;
 
     XenIfaceDebugPrint(TRACE, "> LocalPort %lu, FO %p\n", In->LocalPort, FileObject);
@@ -1047,10 +1049,10 @@ IoctlEvtchnNotify(
     )
 {
     NTSTATUS status;
-    PEVTCHN_NOTIFY_IN In = (PEVTCHN_NOTIFY_IN)Buffer;
+    PXENIFACE_EVTCHN_NOTIFY_IN In = (PXENIFACE_EVTCHN_NOTIFY_IN)Buffer;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_NOTIFY_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_NOTIFY_IN) || OutLen != 0)
         goto fail1;
 #if DBG
     XenIfaceDebugPrint(INFO, "> LocalPort %d, FO %p\n", In->LocalPort, FileObject);
@@ -1074,12 +1076,12 @@ IoctlEvtchnUnmask(
     )
 {
     NTSTATUS status;
-    PEVTCHN_UNMASK_IN In = (PEVTCHN_UNMASK_IN)Buffer;
+    PXENIFACE_EVTCHN_UNMASK_IN In = (PXENIFACE_EVTCHN_UNMASK_IN)Buffer;
     PXENIFACE_EVTCHN_CONTEXT Context = NULL;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(EVTCHN_UNMASK_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_UNMASK_IN) || OutLen != 0)
         goto fail1;
 
     XenIfaceDebugPrint(TRACE, "> LocalPort %d, FO %p\n", In->LocalPort, FileObject);
@@ -1114,7 +1116,7 @@ _Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
-    __in PVOID Argument
+    __in  PVOID Argument
     )
 {
     PXENIFACE_FDO Fdo = Argument;
@@ -1128,7 +1130,7 @@ _Releases_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
-    __in PVOID Argument
+    __in  PVOID Argument
     )
 {
     PXENIFACE_FDO Fdo = Argument;
@@ -1141,7 +1143,7 @@ GnttabReleaseLock(
 _Requires_lock_not_held_(Fdo->IrpQueueLock)
 static
 PIRP
-FindContextIrp(
+FindGnttabIrp(
     __in  PXENIFACE_FDO Fdo,
     __in  PXENIFACE_CONTEXT_ID Id
     )
@@ -1169,11 +1171,11 @@ GnttabFreeGrant(
 
     XenIfaceDebugPrint(TRACE, "Context %p\n", Context);
 
-    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) {
+    if (Context->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) {
         ((PCHAR)Context->KernelVa)[Context->NotifyOffset] = 0;
     }
 
-    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT) {
+    if (Context->Flags & XENIFACE_GNTTAB_USE_NOTIFY_PORT) {
         status = EvtchnNotify(Fdo, Context->NotifyPort, NULL);
 
         if (!NT_SUCCESS(status)) // non-fatal, we must free memory
@@ -1208,7 +1210,7 @@ GnttabFreeGrant(
 
 static DECLSPEC_NOINLINE
 NTSTATUS
-IoctlGnttabGrantPages(
+IoctlGnttabPermitForeignAccess(
     __in     PXENIFACE_FDO  Fdo,
     __in     PCHAR          Buffer,
     __in     ULONG          InLen,
@@ -1217,17 +1219,17 @@ IoctlGnttabGrantPages(
     )
 {
     NTSTATUS status;
-    PGNTTAB_GRANT_PAGES_IN In = (PGNTTAB_GRANT_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In = (PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN)Buffer;
     PXENIFACE_GRANT_CONTEXT Context;
     ULONG Page;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_GRANT_PAGES_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN) || OutLen != 0)
         goto fail1;
 
     status = STATUS_INVALID_PARAMETER;
     if ((In->NumberPages == 0) || (In->NumberPages > 1024 * 1024) ||
-        ((In->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
+        ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
         )
         goto fail2;
 
@@ -1255,7 +1257,7 @@ IoctlGnttabGrantPages(
     // but another check for duplicate ID is performed when the context/IRP is queued at the end.
     // Ideally we would lock the whole section but that's not really an option since we touch user memory.
     status = STATUS_INVALID_PARAMETER;
-    if (FindContextIrp(Fdo, &Context->Id) != NULL)
+    if (FindGnttabIrp(Fdo, &Context->Id) != NULL)
         goto fail4;
 
     status = STATUS_NO_MEMORY;
@@ -1287,7 +1289,7 @@ IoctlGnttabGrantPages(
                                FALSE,
                                Context->RemoteDomain,
                                MmGetMdlPfnArray(Context->Mdl)[Page],
-                               (Context->Flags & GNTTAB_GRANT_PAGES_READONLY) != 0,
+                               (Context->Flags & XENIFACE_GNTTAB_READONLY) != 0,
                                &(Context->Grants[Page]));
 
 // prefast somehow thinks that this call can modify Page...
@@ -1375,7 +1377,7 @@ fail1:
 
 static DECLSPEC_NOINLINE
 NTSTATUS
-IoctlGnttabGetGrants(
+IoctlGnttabGetGrantResult(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -1384,8 +1386,8 @@ IoctlGnttabGetGrants(
     )
 {
     NTSTATUS status;
-    PGNTTAB_GET_GRANTS_IN In = (PGNTTAB_GET_GRANTS_IN)Buffer;
-    PGNTTAB_GET_GRANTS_OUT Out = (PGNTTAB_GET_GRANTS_OUT)Buffer;
+    PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN In = (PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN)Buffer;
+    PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT Out = (PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT)Buffer;
     XENIFACE_CONTEXT_ID Id;
     KIRQL Irql;
     PIRP Irp;
@@ -1393,7 +1395,7 @@ IoctlGnttabGetGrants(
     PXENIFACE_GRANT_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_GET_GRANTS_IN))
+    if (InLen != sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_IN))
         goto fail1;
 
     Id.Process = PsGetCurrentProcess();
@@ -1413,7 +1415,7 @@ IoctlGnttabGetGrants(
     Context = CONTAINING_RECORD(ContextId, XENIFACE_GRANT_CONTEXT, Id);
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (OutLen != (sizeof(GNTTAB_GET_GRANTS_OUT) + sizeof(ULONG) * Context->NumberPages))
+    if (OutLen != (sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT) + sizeof(ULONG) * Context->NumberPages))
         goto fail3;
 
     Out->Address = Context->UserVa;
@@ -1443,7 +1445,7 @@ fail1:
 
 static DECLSPEC_NOINLINE
 NTSTATUS
-IoctlGnttabUngrantPages(
+IoctlGnttabRevokeForeignAccess(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -1451,14 +1453,14 @@ IoctlGnttabUngrantPages(
     )
 {
     NTSTATUS status;
-    PGNTTAB_UNGRANT_PAGES_IN In = (PGNTTAB_UNGRANT_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN In = (PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN)Buffer;
     PXENIFACE_GRANT_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_UNGRANT_PAGES_IN))
+    if (InLen != sizeof(XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN))
         goto fail1;
 
     Id.Type = XENIFACE_CONTEXT_GRANT;
@@ -1500,21 +1502,21 @@ IoctlGnttabMapForeignPages(
     )
 {
     NTSTATUS status;
-    PGNTTAB_MAP_FOREIGN_PAGES_IN In = (PGNTTAB_MAP_FOREIGN_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN In = (PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN)Buffer;
     PXENIFACE_MAP_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen < sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) || OutLen != 0)
+    if (InLen < sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) || OutLen != 0)
         goto fail1;
 
     status = STATUS_INVALID_PARAMETER;
     if ((In->NumberPages == 0) || (In->NumberPages > 1024 * 1024) ||
-        ((In->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
+        ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
         )
         goto fail2;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) + sizeof(ULONG) * In->NumberPages)
+    if (InLen != sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) + sizeof(ULONG) * In->NumberPages)
         goto fail3;
 
     status = STATUS_NO_MEMORY;
@@ -1540,7 +1542,7 @@ IoctlGnttabMapForeignPages(
         XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[i]);
 
     status = STATUS_INVALID_PARAMETER;
-    if (FindContextIrp(Fdo, &Context->Id) != NULL)
+    if (FindGnttabIrp(Fdo, &Context->Id) != NULL)
         goto fail5;
 
     status = XENBUS_GNTTAB(MapForeignPages,
@@ -1548,7 +1550,7 @@ IoctlGnttabMapForeignPages(
                            Context->RemoteDomain,
                            Context->NumberPages,
                            In->References,
-                           Context->Flags & GNTTAB_GRANT_PAGES_READONLY,
+                           Context->Flags & XENIFACE_GNTTAB_READONLY,
                            &Context->Address);
 
     if (!NT_SUCCESS(status))
@@ -1638,7 +1640,7 @@ fail1:
 
 static DECLSPEC_NOINLINE
 NTSTATUS
-IoctlGnttabGetMap(
+IoctlGnttabGetMapResult(
     __in  PXENIFACE_FDO     Fdo,
     __in  PCHAR             Buffer,
     __in  ULONG             InLen,
@@ -1647,8 +1649,8 @@ IoctlGnttabGetMap(
     )
 {
     NTSTATUS status;
-    PGNTTAB_GET_MAP_IN In = (PGNTTAB_GET_MAP_IN)Buffer;
-    PGNTTAB_GET_MAP_OUT Out = (PGNTTAB_GET_MAP_OUT)Buffer;
+    PXENIFACE_GNTTAB_GET_MAP_RESULT_IN In = (PXENIFACE_GNTTAB_GET_MAP_RESULT_IN)Buffer;
+    PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out = (PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT)Buffer;
     XENIFACE_CONTEXT_ID Id;
     KIRQL Irql;
     PIRP Irp;
@@ -1656,7 +1658,7 @@ IoctlGnttabGetMap(
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_GET_MAP_IN) || OutLen != sizeof(GNTTAB_GET_MAP_OUT))
+    if (InLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_IN) || OutLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_OUT))
         goto fail1;
 
     Id.Type = XENIFACE_CONTEXT_MAP;
@@ -1695,8 +1697,8 @@ _IRQL_requires_max_(APC_LEVEL)
 DECLSPEC_NOINLINE
 VOID
 GnttabFreeMap(
-    __in PXENIFACE_FDO Fdo,
-    __in PXENIFACE_MAP_CONTEXT Context
+    __in  PXENIFACE_FDO Fdo,
+    __in  PXENIFACE_MAP_CONTEXT Context
     )
 {
     NTSTATUS status;
@@ -1705,11 +1707,11 @@ GnttabFreeMap(
 
     XenIfaceDebugPrint(TRACE, "Context %p\n", Context);
 
-    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_OFFSET) {
+    if (Context->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) {
         ((PCHAR)Context->KernelVa)[Context->NotifyOffset] = 0;
     }
 
-    if (Context->Flags & GNTTAB_GRANT_PAGES_USE_NOTIFY_PORT) {
+    if (Context->Flags & XENIFACE_GNTTAB_USE_NOTIFY_PORT) {
         status = EvtchnNotify(Fdo, Context->NotifyPort, NULL);
 
         if (!NT_SUCCESS(status)) // non-fatal, we must free memory
@@ -1745,14 +1747,14 @@ IoctlGnttabUnmapForeignPages(
     )
 {
     NTSTATUS status;
-    PGNTTAB_UNMAP_FOREIGN_PAGES_IN In = (PGNTTAB_UNMAP_FOREIGN_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN In = (PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN)Buffer;
     PXENIFACE_MAP_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(GNTTAB_UNMAP_FOREIGN_PAGES_IN) && OutLen != 0)
+    if (InLen != sizeof(XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN) && OutLen != 0)
         goto fail1;
 
     Id.Type = XENIFACE_CONTEXT_MAP;
@@ -1784,7 +1786,7 @@ fail1:
 }
 
 NTSTATUS
-XenIFaceIoctl(
+XenIfaceIoctl(
     __in  PXENIFACE_FDO     Fdo,
     __in  PIRP              Irp
     )
@@ -1830,8 +1832,8 @@ XenIFaceIoctl(
         break;
 
         // evtchn
-    case IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT:
-        status = IoctlEvtchnBindUnboundPort(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
+    case IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND:
+        status = IoctlEvtchnBindUnbound(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN:
@@ -1851,24 +1853,24 @@ XenIFaceIoctl(
         break;
 
         // gnttab
-    case IOCTL_XENIFACE_GNTTAB_GRANT_PAGES:
-        status = IoctlGnttabGrantPages(Fdo, (PCHAR)Buffer, InLen, OutLen, Irp);
+    case IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS:
+        status = IoctlGnttabPermitForeignAccess(Fdo, (PCHAR)Buffer, InLen, OutLen, Irp);
         break;
 
-    case IOCTL_XENIFACE_GNTTAB_GET_GRANTS:
-        status = IoctlGnttabGetGrants(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+    case IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT:
+        status = IoctlGnttabGetGrantResult(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
-    case IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES:
-        status = IoctlGnttabUngrantPages(Fdo, (PCHAR)Buffer, InLen, OutLen);
+    case IOCTL_XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS:
+        status = IoctlGnttabRevokeForeignAccess(Fdo, (PCHAR)Buffer, InLen, OutLen);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES:
         status = IoctlGnttabMapForeignPages(Fdo, (PCHAR)Buffer, InLen, OutLen, Irp);
         break;
 
-    case IOCTL_XENIFACE_GNTTAB_GET_MAP:
-        status = IoctlGnttabGetMap(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+    case IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT:
+        status = IoctlGnttabGetMapResult(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES:

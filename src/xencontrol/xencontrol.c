@@ -190,8 +190,8 @@ XcEvtchnBindUnbound(
     OUT ULONG *LocalPort
     )
 {
-    EVTCHN_BIND_UNBOUND_PORT_IN In;
-    EVTCHN_BIND_UNBOUND_PORT_OUT Out;
+    XENIFACE_EVTCHN_BIND_UNBOUND_IN In;
+    XENIFACE_EVTCHN_BIND_UNBOUND_OUT Out;
     DWORD Returned;
     BOOL Success;
 
@@ -203,7 +203,7 @@ XcEvtchnBindUnbound(
 
     Log(XLL_DEBUG, L"RemoteDomain: %d, Event: 0x%x, Mask: %d", RemoteDomain, Event, Mask);
     Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT,
+                              IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND,
                               &In, sizeof(In),
                               &Out, sizeof(Out),
                               &Returned,
@@ -236,8 +236,8 @@ XcEvtchnBindInterdomain(
     OUT ULONG *LocalPort
     )
 {
-    EVTCHN_BIND_INTERDOMAIN_IN In;
-    EVTCHN_BIND_INTERDOMAIN_OUT Out;
+    XENIFACE_EVTCHN_BIND_INTERDOMAIN_IN In;
+    XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT Out;
     DWORD Returned;
     BOOL Success;
 
@@ -280,7 +280,7 @@ XcEvtchnClose(
     IN  ULONG LocalPort
     )
 {
-    EVTCHN_CLOSE_IN In;
+    XENIFACE_EVTCHN_CLOSE_IN In;
     DWORD Returned;
     BOOL Success;
 
@@ -316,7 +316,7 @@ XcEvtchnNotify(
     IN  ULONG LocalPort
     )
 {
-    EVTCHN_NOTIFY_IN In;
+    XENIFACE_EVTCHN_NOTIFY_IN In;
     DWORD Returned;
     BOOL Success;
 
@@ -352,7 +352,7 @@ XcEvtchnUnmask(
     IN  ULONG LocalPort
     )
 {
-    EVTCHN_UNMASK_IN In;
+    XENIFACE_EVTCHN_UNMASK_IN In;
     DWORD Returned;
     BOOL Success;
 
@@ -409,20 +409,20 @@ FindRequest(
 }
 
 DWORD
-XcGnttabGrantAccess(
+XcGnttabPermitForeignAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  ULONG NotifyOffset,
     IN  ULONG NotifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    IN  XENIFACE_GNTTAB_PAGE_FLAGS Flags,
     OUT PVOID *Address,
     OUT ULONG *References
     )
 {
-    GNTTAB_GRANT_PAGES_IN In1;
-    GNTTAB_GET_GRANTS_IN In2;
-    GNTTAB_GET_GRANTS_OUT *Out2;
+    XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In1;
+    XENIFACE_GNTTAB_GET_GRANT_RESULT_IN In2;
+    XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT *Out2;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned, Size;
     BOOL Success;
@@ -440,7 +440,7 @@ XcGnttabGrantAccess(
     In1.NotifyPort = NotifyPort;
     In1.Flags = Flags;
 
-    Size = sizeof(GNTTAB_GET_GRANTS_OUT) + NumberPages * sizeof(ULONG);
+    Size = sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT) + NumberPages * sizeof(ULONG);
     Out2 = malloc(Size);
     Request = malloc(sizeof(*Request));
 
@@ -456,7 +456,7 @@ XcGnttabGrantAccess(
         In1.RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
     Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_GRANT_PAGES,
+                              IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS,
                               &In1, sizeof(In1),
                               NULL, 0,
                               &Returned,
@@ -478,7 +478,7 @@ XcGnttabGrantAccess(
     // get actual result
     In2.RequestId = In1.RequestId;
     Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_GET_GRANTS,
+                              IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT,
                               &In2, sizeof(In2),
                               Out2, Size,
                               &Returned,
@@ -512,12 +512,12 @@ fail:
 }
 
 DWORD
-XcGnttabRevokeAccess(
+XcGnttabRevokeForeignAccess(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
 {
-    GNTTAB_UNGRANT_PAGES_IN In;
+    XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN In;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned;
     BOOL Success;
@@ -537,7 +537,7 @@ XcGnttabRevokeAccess(
     In.RequestId = Request->Id;
 
     Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES,
+                              IOCTL_XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS,
                               &In, sizeof(In),
                               NULL, 0,
                               &Returned,
@@ -564,20 +564,20 @@ fail:
 }
 
 DWORD
-XcGnttabMap(
+XcGnttabMapForeignPages(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  USHORT RemoteDomain,
     IN  ULONG NumberPages,
     IN  PULONG References,
     IN  ULONG NotifyOffset,
     IN  ULONG NotifyPort,
-    IN  GNTTAB_GRANT_PAGES_FLAGS Flags,
+    IN  XENIFACE_GNTTAB_PAGE_FLAGS Flags,
     OUT PVOID *Address
     )
 {
-    GNTTAB_MAP_FOREIGN_PAGES_IN *In1;
-    GNTTAB_GET_MAP_IN In2;
-    GNTTAB_GET_MAP_OUT Out2;
+    XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN *In1;
+    XENIFACE_GNTTAB_GET_MAP_RESULT_IN In2;
+    XENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out2;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned, Size;
     BOOL Success;
@@ -589,7 +589,7 @@ XcGnttabMap(
     EnterCriticalSection(&Xc->RequestListLock);
 
     Status = ERROR_OUTOFMEMORY;
-    Size = sizeof(GNTTAB_MAP_FOREIGN_PAGES_IN) + NumberPages * sizeof(ULONG);
+    Size = sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) + NumberPages * sizeof(ULONG);
     In1 = malloc(Size);
     Request = malloc(sizeof(*Request));
     if (!In1 || !Request)
@@ -636,7 +636,7 @@ XcGnttabMap(
     // get actual result
     In2.RequestId = In1->RequestId;
     Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_GET_MAP,
+                              IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT,
                               &In2, sizeof(In2),
                               &Out2, sizeof(Out2),
                               &Returned,
@@ -667,12 +667,12 @@ fail:
 }
 
 DWORD
-XcGnttabUnmap(
+XcGnttabUnmapForeignPages(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PVOID Address
     )
 {
-    GNTTAB_UNMAP_FOREIGN_PAGES_IN In;
+    XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN In;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned;
     BOOL Success;
@@ -884,7 +884,7 @@ XcStoreSetPermissions(
 {
     DWORD Returned, Size;
     BOOL Success;
-    STORE_SET_PERMISSIONS_IN *In = NULL;
+    XENIFACE_STORE_SET_PERMISSIONS_IN *In = NULL;
 
     FUNCTION_ENTER();
 
@@ -892,7 +892,7 @@ XcStoreSetPermissions(
     for (ULONG i = 0; i < Count; i++)
         Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", Permissions[i].Domain, Permissions[i].Mask);
 
-    Size = sizeof(STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);
+    Size = sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);
     In = malloc(Size);
     if (!In) {
         SetLastError(ERROR_OUTOFMEMORY);
@@ -937,8 +937,8 @@ XcStoreAddWatch(
 {
     DWORD Returned;
     BOOL Success;
-    STORE_ADD_WATCH_IN In;
-    STORE_ADD_WATCH_OUT Out;
+    XENIFACE_STORE_ADD_WATCH_IN In;
+    XENIFACE_STORE_ADD_WATCH_OUT Out;
 
     FUNCTION_ENTER();
 
@@ -980,7 +980,7 @@ XcStoreRemoveWatch(
 {
     DWORD Returned;
     BOOL Success;
-    STORE_REMOVE_WATCH_IN In;
+    XENIFACE_STORE_REMOVE_WATCH_IN In;
 
     FUNCTION_ENTER();
 
