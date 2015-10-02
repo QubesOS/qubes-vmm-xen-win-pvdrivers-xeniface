@@ -51,33 +51,24 @@ CsqPeekNextIrp(
     TargetId = PeekContext;
     Head = &Fdo->IrpList;
 
-    //
-    // If the IRP is NULL, we will start peeking from the listhead, else
-    // we will start from that IRP onwards. This is done under the
+    // If the IRP is NULL, we will start peeking from the list head,
+    // else we will start from that IRP onwards. This is done under the
     // assumption that new IRPs are always inserted at the tail.
-    //
 
-    if (Irp == NULL)
-    {
+    if (Irp == NULL) {
         NextEntry = Head->Flink;
-    }
-    else
-    {
+    } else {
         NextEntry = Irp->Tail.Overlay.ListEntry.Flink;
     }
 
-    while (NextEntry != Head)
-    {
+    while (NextEntry != Head) {
         NextIrp = CONTAINING_RECORD(NextEntry, IRP, Tail.Overlay.ListEntry);
 
-        if (PeekContext)
-        {
+        if (PeekContext) {
             Id = NextIrp->Tail.Overlay.DriverContext[0];
             if (Id->RequestId == TargetId->RequestId && Id->Process == TargetId->Process)
                 break;
-        }
-        else
-        {
+        } else {
             break;
         }
         NextIrp = NULL;
@@ -118,6 +109,7 @@ CsqReleaseLock(
     KeReleaseSpinLock(&Fdo->IrpQueueLock, Irql);
 }
 
+_IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 CsqCompleteCanceledIrp(
     _In_  PIO_CSQ             Csq,
@@ -130,7 +122,10 @@ CsqCompleteCanceledIrp(
     XenIfaceDebugPrint(TRACE, "Irp %p, IRQL %d\n",
                        Irp, KeGetCurrentIrql());
 
+    // This is not guaranteed to run at PASSIVE_LEVEL, so queue a work item
+    // to perform actual cleanup/IRP completion.
+
     WorkItem = IoAllocateWorkItem(Fdo->Dx->DeviceObject);
-    Irp->Tail.Overlay.DriverContext[1] = WorkItem; // store so the work item proc can free it
+    Irp->Tail.Overlay.DriverContext[1] = WorkItem; // store so the work item can free it
     IoQueueWorkItem(WorkItem, CompleteGnttabIrp, DelayedWorkQueue, Irp);
 }

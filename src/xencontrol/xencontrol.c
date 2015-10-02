@@ -54,8 +54,7 @@ _LogMultiSz(
     PCHAR Ptr;
     ULONG Len;
 
-    for (Ptr = MultiSz; *Ptr;)
-    {
+    for (Ptr = MultiSz; *Ptr;) {
         Len = (ULONG)strlen(Ptr);
         _Log(Xc->Logger, Level, Xc->LogLevel, Caller, L"%S", Ptr);
         Ptr += (Len + 1);
@@ -105,24 +104,21 @@ XcOpen(
     InitializeCriticalSection(&Context->RequestListLock);
 
     DevInfo = SetupDiGetClassDevs(&GUID_INTERFACE_XENIFACE, 0, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-    if (DevInfo == INVALID_HANDLE_VALUE)
-    {
+    if (DevInfo == INVALID_HANDLE_VALUE) {
         _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
              L"XENIFACE device class doesn't exist");
         goto fail;
     }
 
     InterfaceData.cbSize = sizeof(InterfaceData);
-    if (!SetupDiEnumDeviceInterfaces(DevInfo, NULL, &GUID_INTERFACE_XENIFACE, 0, &InterfaceData))
-    {
+    if (!SetupDiEnumDeviceInterfaces(DevInfo, NULL, &GUID_INTERFACE_XENIFACE, 0, &InterfaceData)) {
         _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
              L"Failed to enumerate XENIFACE devices");
         goto fail;
     }
 
     SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, NULL, 0, &BufferSize, NULL);
-    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-    {
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
         _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
              L"Failed to get buffer size for device details");
         goto fail;
@@ -132,16 +128,14 @@ XcOpen(
     // ...yeah, that's the point
 #pragma warning(suppress: 6102)
     DetailData = (SP_DEVICE_INTERFACE_DETAIL_DATA *)malloc(BufferSize);
-    if (!DetailData)
-    {
+    if (!DetailData) {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
 
     DetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
-    if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, DetailData, BufferSize, NULL, NULL))
-    {
+    if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &InterfaceData, DetailData, BufferSize, NULL, NULL)) {
         _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
              L"Failed to get XENIFACE device path");
         goto fail;
@@ -155,8 +149,7 @@ XcOpen(
                                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
                                    NULL);
 
-    if (Context->XenIface == INVALID_HANDLE_VALUE)
-    {
+    if (Context->XenIface == INVALID_HANDLE_VALUE) {
         _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
              L"Failed to open XENIFACE device, path: %s", DetailData->DevicePath);
         goto fail;
@@ -216,8 +209,7 @@ XcEvtchnBindUnbound(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND_PORT failed");
         goto fail;
     }
@@ -265,8 +257,7 @@ XcEvtchnBindInterdomain(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN failed");
         goto fail;
     }
@@ -305,8 +296,7 @@ XcEvtchnClose(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_CLOSE failed");
         goto fail;
     }
@@ -342,8 +332,7 @@ XcEvtchnNotify(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_NOTIFY failed");
         goto fail;
     }
@@ -379,8 +368,7 @@ XcEvtchnUnmask(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_EVTCHN_UNMASK failed");
         goto fail;
     }
@@ -405,8 +393,7 @@ FindRequest(
 
     EnterCriticalSection(&Xc->RequestListLock);
     Entry = Xc->RequestList.Flink;
-    while (Entry != &Xc->RequestList)
-    {
+    while (Entry != &Xc->RequestList) {
         PXENCONTROL_GNTTAB_REQUEST Request = CONTAINING_RECORD(Entry, XENCONTROL_GNTTAB_REQUEST, ListEntry);
         if (Request->Address == Address)
         {
@@ -477,16 +464,12 @@ XcGnttabGrantAccess(
 
     Status = GetLastError();
     // this IOCTL is expected to be pending on success
-    if (!Success)
-    {
-        if (Status != ERROR_IO_PENDING)
-        {
+    if (!Success) {
+        if (Status != ERROR_IO_PENDING) {
             Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GRANT_PAGES failed");
             goto fail;
         }
-    }
-    else
-    {
+    } else {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_GRANT_PAGES not pending");
         Status = ERROR_UNIDENTIFIED_ERROR;
         goto fail;
@@ -546,8 +529,7 @@ XcGnttabRevokeAccess(
 
     Status = ERROR_NOT_FOUND;
     Request = FindRequest(Xc, Address);
-    if (!Request)
-    {
+    if (!Request) {
         Log(XLL_ERROR, L"Address %p not granted", Address);
         goto fail;
     }
@@ -562,8 +544,7 @@ XcGnttabRevokeAccess(
                               NULL);
 
     Status = GetLastError();
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES failed");
         goto fail;
     }
@@ -641,16 +622,12 @@ XcGnttabMap(
 
     Status = GetLastError();
     // this IOCTL is expected to be pending on success
-    if (!Success)
-    {
-        if (Status != ERROR_IO_PENDING)
-        {
+    if (!Success) {
+        if (Status != ERROR_IO_PENDING) {
             Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES failed");
             goto fail;
         }
-    }
-    else
-    {
+    } else {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES not pending");
         Status = ERROR_UNIDENTIFIED_ERROR;
         goto fail;
@@ -707,8 +684,7 @@ XcGnttabUnmap(
 
     Status = ERROR_NOT_FOUND;
     Request = FindRequest(Xc, Address);
-    if (!Request)
-    {
+    if (!Request) {
         Log(XLL_ERROR, L"Address %p not mapped", Address);
         goto fail;
     }
@@ -723,8 +699,7 @@ XcGnttabUnmap(
                               NULL);
 
     Status = GetLastError();
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES failed");
         goto fail;
     }
@@ -764,8 +739,7 @@ XcStoreRead(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_READ failed");
         goto fail;
     }
@@ -797,8 +771,7 @@ XcStoreWrite(
 
     cbBuffer = (DWORD)(strlen(Path) + 1 + strlen(Value) + 1 + 1);
     Buffer = malloc(cbBuffer);
-    if (!Buffer)
-    {
+    if (!Buffer) {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
@@ -815,8 +788,7 @@ XcStoreWrite(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_WRITE failed");
         goto fail;
     }
@@ -853,8 +825,7 @@ XcStoreDirectory(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_DIRECTORY failed");
         goto fail;
     }
@@ -889,8 +860,7 @@ XcStoreRemove(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_REMOVE failed");
         goto fail;
     }
@@ -924,8 +894,7 @@ XcStoreSetPermissions(
 
     Size = sizeof(STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);
     In = malloc(Size);
-    if (!In)
-    {
+    if (!In) {
         SetLastError(ERROR_OUTOFMEMORY);
         goto fail;
     }
@@ -942,8 +911,7 @@ XcStoreSetPermissions(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_SET_PERMISSIONS failed");
         goto fail;
     }
@@ -986,8 +954,7 @@ XcStoreAddWatch(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_ADD_WATCH failed");
         goto fail;
     }
@@ -1027,8 +994,7 @@ XcStoreRemoveWatch(
                               &Returned,
                               NULL);
 
-    if (!Success)
-    {
+    if (!Success) {
         Log(XLL_ERROR, L"IOCTL_XENIFACE_STORE_REMOVE_WATCH failed");
         goto fail;
     }

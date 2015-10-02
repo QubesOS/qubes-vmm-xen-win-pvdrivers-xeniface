@@ -120,8 +120,7 @@ crc64_update(uint64_t *crc, const void *data, size_t len)
     const unsigned char *p = data;
     int i;
 
-    while (len-- > 0U)
-    {
+    while (len-- > 0U) {
         i = ((int)(*crc >> 56) ^ *p++) & 0xff;
         *crc = crc64_table[i] ^ (*crc << 8);
     }

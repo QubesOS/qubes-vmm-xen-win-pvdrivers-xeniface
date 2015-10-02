@@ -742,8 +742,8 @@ CompleteGnttabIrp(
     XenIfaceDebugPrint(TRACE, "Irp %p, Process %p, Id %lu, Type %d, IRQL %d\n",
                        Irp, Id->Process, Id->RequestId, Id->Type, KeGetCurrentIrql());
 
-    switch (Id->Type)
-    {
+    switch (Id->Type) {
+
     case XENIFACE_CONTEXT_GRANT:
         GnttabFreeGrant(Fdo, CONTAINING_RECORD(Id, XENIFACE_GRANT_CONTEXT, Id));
         break;
@@ -1247,7 +1247,8 @@ IoctlGnttabGrantPages(
     Context->NotifyPort = In->NotifyPort;
 
     XenIfaceDebugPrint(TRACE, "> RemoteDomain %d, NumberPages %lu, Flags 0x%x, Offset 0x%x, Port %d, Process %p, Id %lu\n",
-                       Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort, Context->Id.Process, Context->Id.RequestId);
+                       Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort,
+                       Context->Id.Process, Context->Id.RequestId);
 
     // Check if the request ID is unique.
     // This doesn't protect us from simultaneous requests with the same ID arriving here
@@ -1297,7 +1298,7 @@ IoctlGnttabGrantPages(
     }
 
     // map into user mode
-#pragma prefast(suppress: 6320) // we want to catch all exceptions
+#pragma prefast(suppress:6320) // we want to catch all exceptions
     __try {
         Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
     }
@@ -1532,7 +1533,8 @@ IoctlGnttabMapForeignPages(
     Context->NotifyPort = In->NotifyPort;
 
     XenIfaceDebugPrint(TRACE, "> RemoteDomain %d, NumberPages %lu, Flags 0x%x, Offset 0x%x, Port %d, Process %p, Id %lu\n",
-                       Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort, Context->Id.Process, Context->Id.RequestId);
+                       Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort,
+                       Context->Id.Process, Context->Id.RequestId);
 
     for (ULONG i = 0; i < In->NumberPages; i++)
         XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[i]);
