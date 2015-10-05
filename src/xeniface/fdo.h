@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_FDO_H
 #define _XENIFACE_FDO_H
 
-#include <ntddk.h>
+#include <ntifs.h>
 #include <store_interface.h>
 #include <evtchn_interface.h>
 #include <gnttab_interface.h>

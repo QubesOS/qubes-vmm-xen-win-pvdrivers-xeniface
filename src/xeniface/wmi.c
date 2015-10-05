@@ -30,7 +30,7 @@
  */
 
 
-#include <ntddk.h>
+#include <ntifs.h>
 #include <initguid.h>
 #include <wmistr.h>
 #include <wmilib.h>

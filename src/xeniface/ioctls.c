@@ -735,11 +735,21 @@ CompleteGnttabIrp(
     PIRP Irp = Context;
     PXENIFACE_CONTEXT_ID Id;
     PIO_WORKITEM WorkItem;
+    KAPC_STATE ApcState;
+    BOOLEAN ChangeProcess;
 
     ASSERT(Context != NULL);
 
     Id = Irp->Tail.Overlay.DriverContext[0];
     WorkItem = Irp->Tail.Overlay.DriverContext[1];
+    
+    // We are not guaranteed to be in the context of the process that initiated the IRP,
+    // but we need to be there to unmap memory.
+    ChangeProcess = PsGetCurrentProcess() != Id->Process;
+    if (ChangeProcess) {
+        XenIfaceDebugPrint(TRACE, "Changing process from %p to %p\n", PsGetCurrentProcess(), Id->Process);
+        KeStackAttachProcess(Id->Process, &ApcState);
+    }
 
     XenIfaceDebugPrint(TRACE, "Irp %p, Process %p, Id %lu, Type %d, IRQL %d\n",
                        Irp, Id->Process, Id->RequestId, Id->Type, KeGetCurrentIrql());
@@ -757,6 +767,9 @@ CompleteGnttabIrp(
     default:
         ASSERT(FALSE);
     }
+
+    if (ChangeProcess)
+        KeUnstackDetachProcess(&ApcState);
 
     IoFreeWorkItem(WorkItem);
 

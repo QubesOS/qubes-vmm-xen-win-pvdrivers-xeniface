@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_ASSERT_H
 #define _XENIFACE_ASSERT_H
 
-#include <ntddk.h>
+#include <ntifs.h>
 
 #include "log.h"
 

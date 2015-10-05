@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 
-#include <ntddk.h>
+#include <ntifs.h>
 #include <util.h>
 
 #include "registry.h"
