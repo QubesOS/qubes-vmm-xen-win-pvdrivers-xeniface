@@ -67,9 +67,7 @@ XcRegisterLogger(
     IN  XencontrolLogger *Logger
     )
 {
-    FUNCTION_ENTER();
     Xc->Logger = Logger;
-    FUNCTION_EXIT();
 }
 
 void
@@ -174,10 +172,8 @@ XcClose(
     IN  PXENCONTROL_CONTEXT Xc
     )
 {
-    FUNCTION_ENTER();
     CloseHandle(Xc->XenIface);
     DeleteCriticalSection(&Xc->RequestListLock);
-    FUNCTION_EXIT();
     free(Xc);
 }
 
@@ -194,8 +190,6 @@ XcEvtchnBindUnbound(
     XENIFACE_EVTCHN_BIND_UNBOUND_OUT Out;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     In.RemoteDomain = RemoteDomain;
     In.Event = Event;
@@ -217,12 +211,10 @@ XcEvtchnBindUnbound(
     *LocalPort = Out.LocalPort;
     Log(XLL_DEBUG, L"LocalPort: %d", *LocalPort);
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -240,8 +232,6 @@ XcEvtchnBindInterdomain(
     XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT Out;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     In.RemoteDomain = RemoteDomain;
     In.RemotePort = RemotePort;
@@ -265,12 +255,10 @@ XcEvtchnBindInterdomain(
     *LocalPort = Out.LocalPort;
     Log(XLL_DEBUG, L"LocalPort: %d", *LocalPort);
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -283,8 +271,6 @@ XcEvtchnClose(
     XENIFACE_EVTCHN_CLOSE_IN In;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     In.LocalPort = LocalPort;
 
@@ -301,12 +287,10 @@ XcEvtchnClose(
         goto fail;
     }
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -319,8 +303,6 @@ XcEvtchnNotify(
     XENIFACE_EVTCHN_NOTIFY_IN In;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     In.LocalPort = LocalPort;
 
@@ -337,12 +319,10 @@ XcEvtchnNotify(
         goto fail;
     }
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -355,8 +335,6 @@ XcEvtchnUnmask(
     XENIFACE_EVTCHN_UNMASK_IN In;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     In.LocalPort = LocalPort;
 
@@ -373,12 +351,10 @@ XcEvtchnUnmask(
         goto fail;
     }
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -427,8 +403,6 @@ XcGnttabPermitForeignAccess(
     DWORD Returned, Size;
     BOOL Success;
     DWORD Status;
-
-    FUNCTION_ENTER();
 
     // lock the whole operation to not generate duplicate IDs
     EnterCriticalSection(&Xc->RequestListLock);
@@ -499,7 +473,6 @@ XcGnttabPermitForeignAccess(
         Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, Out2->References[i]);
 
     free(Out2);
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
@@ -507,7 +480,6 @@ fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     free(Out2);
     free(Request);
-    FUNCTION_EXIT();
     return Status;
 }
 
@@ -522,8 +494,6 @@ XcGnttabRevokeForeignAccess(
     DWORD Returned;
     BOOL Success;
     DWORD Status;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
@@ -554,12 +524,10 @@ XcGnttabRevokeForeignAccess(
     LeaveCriticalSection(&Xc->RequestListLock);
     free(Request);
 
-    FUNCTION_EXIT();
     return Status;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
-    FUNCTION_EXIT();
     return Status;
 }
 
@@ -582,8 +550,6 @@ XcGnttabMapForeignPages(
     DWORD Returned, Size;
     BOOL Success;
     DWORD Status;
-
-    FUNCTION_ENTER();
 
     // lock the whole operation to not generate duplicate IDs
     EnterCriticalSection(&Xc->RequestListLock);
@@ -654,7 +620,6 @@ XcGnttabMapForeignPages(
     Log(XLL_DEBUG, L"Address: 0x%p", *Address);
 
     free(In1);
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
@@ -662,7 +627,6 @@ fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
     free(In1);
     free(Request);
-    FUNCTION_EXIT();
     return Status;
 }
 
@@ -677,8 +641,6 @@ XcGnttabUnmapForeignPages(
     DWORD Returned;
     BOOL Success;
     DWORD Status;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Address: 0x%p", Address);
 
@@ -709,12 +671,10 @@ XcGnttabUnmapForeignPages(
     LeaveCriticalSection(&Xc->RequestListLock);
     free(Request);
 
-    FUNCTION_EXIT();
     return Status;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", Status, Status);
-    FUNCTION_EXIT();
     return Status;
 }
 
@@ -728,8 +688,6 @@ XcStoreRead(
 {
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
     Success = DeviceIoControl(Xc->XenIface,
@@ -746,12 +704,10 @@ XcStoreRead(
 
     Log(XLL_DEBUG, L"Value: '%S'", Output);
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -766,8 +722,6 @@ XcStoreWrite(
     DWORD cbBuffer;
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     cbBuffer = (DWORD)(strlen(Path) + 1 + strlen(Value) + 1 + 1);
     Buffer = malloc(cbBuffer);
@@ -794,13 +748,11 @@ XcStoreWrite(
     }
 
     free(Buffer);
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
     free(Buffer);
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -814,8 +766,6 @@ XcStoreDirectory(
 {
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
     Success = DeviceIoControl(Xc->XenIface,
@@ -832,12 +782,10 @@ XcStoreDirectory(
 
     _LogMultiSz(Xc, __FUNCTION__, XLL_DEBUG, Output);
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -849,8 +797,6 @@ XcStoreRemove(
 {
     DWORD Returned;
     BOOL Success;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S'", Path);
     Success = DeviceIoControl(Xc->XenIface,
@@ -865,12 +811,10 @@ XcStoreRemove(
         goto fail;
     }
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -885,8 +829,6 @@ XcStoreSetPermissions(
     DWORD Returned, Size;
     BOOL Success;
     XENIFACE_STORE_SET_PERMISSIONS_IN *In = NULL;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S', count: %lu", Path, Count);
     for (ULONG i = 0; i < Count; i++)
@@ -917,13 +859,11 @@ XcStoreSetPermissions(
     }
 
     free(In);
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
     free(In);
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -939,8 +879,6 @@ XcStoreAddWatch(
     BOOL Success;
     XENIFACE_STORE_ADD_WATCH_IN In;
     XENIFACE_STORE_ADD_WATCH_OUT Out;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Path: '%S', Event: 0x%x", Path, Event);
 
@@ -963,12 +901,10 @@ XcStoreAddWatch(
 
     Log(XLL_DEBUG, L"Handle: %p", *Handle);
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }
 
@@ -981,8 +917,6 @@ XcStoreRemoveWatch(
     DWORD Returned;
     BOOL Success;
     XENIFACE_STORE_REMOVE_WATCH_IN In;
-
-    FUNCTION_ENTER();
 
     Log(XLL_DEBUG, L"Handle: %p", Handle);
 
@@ -999,11 +933,9 @@ XcStoreRemoveWatch(
         goto fail;
     }
 
-    FUNCTION_EXIT();
     return ERROR_SUCCESS;
 
 fail:
     Log(XLL_ERROR, L"Error: %d 0x%x", GetLastError(), GetLastError());
-    FUNCTION_EXIT();
     return GetLastError();
 }

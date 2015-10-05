@@ -7,14 +7,6 @@
 #define Log(level, format, ...) \
         _Log(Xc->Logger, level, Xc->LogLevel, __FUNCTION__, format, __VA_ARGS__)
 
-#if defined (_DEBUG)
-#   define FUNCTION_ENTER() _Log(Xc->Logger, XLL_TRACE, Xc->LogLevel, __FUNCTION__, L"-->")
-#   define FUNCTION_EXIT() _Log(Xc->Logger, XLL_TRACE, Xc->LogLevel, __FUNCTION__, L"<--")
-#else
-#   define FUNCTION_ENTER()
-#   define FUNCTION_EXIT()
-#endif
-
 #define InitializeListHead(ListHead) ( \
     (ListHead)->Flink = (ListHead)->Blink = (ListHead))
 
