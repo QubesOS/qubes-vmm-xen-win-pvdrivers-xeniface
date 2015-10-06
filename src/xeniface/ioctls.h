@@ -97,6 +97,149 @@ XenIfaceIoctl(
     __in  PIRP              Irp
     );
 
+_IRQL_requires_(PASSIVE_LEVEL)
+VOID
+XenIfaceCleanup(
+    PXENIFACE_FDO Fdo,
+    PFILE_OBJECT  FileObject
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreRead(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreWrite(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreDirectory(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreRemove(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreSetPermissions(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreAddWatch(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlStoreRemoveWatch(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject
+    );
+
+_IRQL_requires_max_(DISPATCH_LEVEL)
+VOID
+StoreFreeWatch(
+    __in  PXENIFACE_FDO Fdo,
+    __in  PXENIFACE_STORE_CONTEXT Context
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnBindUnbound(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnBindInterdomain(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnClose(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnNotify(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlEvtchnUnmask(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __in  PFILE_OBJECT      FileObject
+    );
+
+_Requires_lock_not_held_(Fdo->EvtchnLock)
+DECLSPEC_NOINLINE
+NTSTATUS
+EvtchnNotify(
+    __in      PXENIFACE_FDO Fdo,
+    __in      ULONG         LocalPort,
+    __in_opt  PFILE_OBJECT  FileObject
+    );
+
 _Function_class_(KDEFERRED_ROUTINE)
 _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
@@ -110,16 +253,67 @@ EvtchnNotificationDpc(
 
 _IRQL_requires_(PASSIVE_LEVEL)
 VOID
-XenIfaceCleanup(
-    PXENIFACE_FDO Fdo,
-    PFILE_OBJECT  FileObject
+EvtchnFree(
+    __in PXENIFACE_FDO Fdo,
+    __in PXENIFACE_EVTCHN_CONTEXT Context
     );
 
-_Function_class_(IO_WORKITEM_ROUTINE)
-VOID
-CompleteGnttabIrp(
-    __in      PDEVICE_OBJECT DeviceObject,
-    __in_opt  PVOID          Context
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabPermitForeignAccess(
+    __in     PXENIFACE_FDO  Fdo,
+    __in     PCHAR          Buffer,
+    __in     ULONG          InLen,
+    __in     ULONG          OutLen,
+    __inout  PIRP           Irp
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabGetGrantResult(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabRevokeForeignAccess(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabMapForeignPages(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __inout  PIRP           Irp
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabGetMapResult(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen,
+    __out PULONG_PTR        Info
+    );
+
+DECLSPEC_NOINLINE
+NTSTATUS
+IoctlGnttabUnmapForeignPages(
+    __in  PXENIFACE_FDO     Fdo,
+    __in  PCHAR             Buffer,
+    __in  ULONG             InLen,
+    __in  ULONG             OutLen
     );
 
 _Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
@@ -134,6 +328,13 @@ _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
     __in PVOID Argument
+    );
+
+_Function_class_(IO_WORKITEM_ROUTINE)
+VOID
+CompleteGnttabIrp(
+    __in      PDEVICE_OBJECT DeviceObject,
+    __in_opt  PVOID          Context
     );
 
 _IRQL_requires_max_(APC_LEVEL)
