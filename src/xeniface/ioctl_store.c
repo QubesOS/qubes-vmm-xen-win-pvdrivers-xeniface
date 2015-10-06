@@ -349,13 +349,13 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreSetPermissions(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     )
 {
     NTSTATUS status;
-    PXENIFACE_STORE_SET_PERMISSIONS_IN In = (PXENIFACE_STORE_SET_PERMISSIONS_IN)Buffer;
+    PXENIFACE_STORE_SET_PERMISSIONS_IN In = Buffer;
     ULONG Index;
     PCHAR Path;
 
@@ -417,7 +417,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreAddWatch(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject,
@@ -425,8 +425,8 @@ IoctlStoreAddWatch(
     )
 {
     NTSTATUS status;
-    PXENIFACE_STORE_ADD_WATCH_IN In = (PXENIFACE_STORE_ADD_WATCH_IN)Buffer;
-    PXENIFACE_STORE_ADD_WATCH_OUT Out = (PXENIFACE_STORE_ADD_WATCH_OUT)Buffer;
+    PXENIFACE_STORE_ADD_WATCH_IN In = Buffer;
+    PXENIFACE_STORE_ADD_WATCH_OUT Out = Buffer;
     PCHAR Path;
     PXENIFACE_STORE_CONTEXT Context;
 
@@ -502,8 +502,8 @@ fail1:
 _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 StoreFreeWatch(
-    __in  PXENIFACE_FDO Fdo,
-    __in  PXENIFACE_STORE_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_STORE_CONTEXT Context
     )
 {
     NTSTATUS status;
@@ -526,14 +526,14 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreRemoveWatch(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject
     )
 {
     NTSTATUS status;
-    PXENIFACE_STORE_REMOVE_WATCH_IN In = (PXENIFACE_STORE_REMOVE_WATCH_IN)Buffer;
+    PXENIFACE_STORE_REMOVE_WATCH_IN In = Buffer;
     PXENIFACE_STORE_CONTEXT Context = NULL;
     KIRQL Irql;
     PLIST_ENTRY Node;

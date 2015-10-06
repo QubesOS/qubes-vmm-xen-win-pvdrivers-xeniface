@@ -38,8 +38,8 @@
 _IRQL_requires_(PASSIVE_LEVEL) // EvtchnFree calls KeFlushQueuedDpcs
 VOID
 XenIfaceCleanup(
-    PXENIFACE_FDO Fdo,
-    PFILE_OBJECT  FileObject
+    __in  PXENIFACE_FDO Fdo,
+    __in  PFILE_OBJECT  FileObject
     )
 {
     PLIST_ENTRY Node;
@@ -96,8 +96,8 @@ XenIfaceCleanup(
 
 NTSTATUS
 XenIfaceIoctl(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PIRP              Irp
+    __in     PXENIFACE_FDO     Fdo,
+    __inout  PIRP              Irp
     )
 {
     NTSTATUS            status;
@@ -129,61 +129,61 @@ XenIfaceIoctl(
         break;
 
     case IOCTL_XENIFACE_STORE_SET_PERMISSIONS:
-        status = IoctlStoreSetPermissions(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        status = IoctlStoreSetPermissions(Fdo, Buffer, InLen, OutLen);
         break;
 
     case IOCTL_XENIFACE_STORE_ADD_WATCH:
-        status = IoctlStoreAddWatch(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
+        status = IoctlStoreAddWatch(Fdo, Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_STORE_REMOVE_WATCH:
-        status = IoctlStoreRemoveWatch(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject);
+        status = IoctlStoreRemoveWatch(Fdo, Buffer, InLen, OutLen, Stack->FileObject);
         break;
 
         // evtchn
     case IOCTL_XENIFACE_EVTCHN_BIND_UNBOUND:
-        status = IoctlEvtchnBindUnbound(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
+        status = IoctlEvtchnBindUnbound(Fdo, Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_EVTCHN_BIND_INTERDOMAIN:
-        status = IoctlEvtchnBindInterdomain(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
+        status = IoctlEvtchnBindInterdomain(Fdo, Buffer, InLen, OutLen, Stack->FileObject, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_EVTCHN_CLOSE:
-        status = IoctlEvtchnClose(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject);
+        status = IoctlEvtchnClose(Fdo, Buffer, InLen, OutLen, Stack->FileObject);
         break;
 
     case IOCTL_XENIFACE_EVTCHN_NOTIFY:
-        status = IoctlEvtchnNotify(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject);
+        status = IoctlEvtchnNotify(Fdo, Buffer, InLen, OutLen, Stack->FileObject);
         break;
 
     case IOCTL_XENIFACE_EVTCHN_UNMASK:
-        status = IoctlEvtchnUnmask(Fdo, (PCHAR)Buffer, InLen, OutLen, Stack->FileObject);
+        status = IoctlEvtchnUnmask(Fdo, Buffer, InLen, OutLen, Stack->FileObject);
         break;
 
         // gnttab
     case IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS:
-        status = IoctlGnttabPermitForeignAccess(Fdo, (PCHAR)Buffer, InLen, OutLen, Irp);
+        status = IoctlGnttabPermitForeignAccess(Fdo, Buffer, InLen, OutLen, Irp);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT:
-        status = IoctlGnttabGetGrantResult(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        status = IoctlGnttabGetGrantResult(Fdo, Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS:
-        status = IoctlGnttabRevokeForeignAccess(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        status = IoctlGnttabRevokeForeignAccess(Fdo, Buffer, InLen, OutLen);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES:
-        status = IoctlGnttabMapForeignPages(Fdo, (PCHAR)Buffer, InLen, OutLen, Irp);
+        status = IoctlGnttabMapForeignPages(Fdo, Buffer, InLen, OutLen, Irp);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT:
-        status = IoctlGnttabGetMapResult(Fdo, (PCHAR)Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+        status = IoctlGnttabGetMapResult(Fdo, Buffer, InLen, OutLen, &Irp->IoStatus.Information);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES:
-        status = IoctlGnttabUnmapForeignPages(Fdo, (PCHAR)Buffer, InLen, OutLen);
+        status = IoctlGnttabUnmapForeignPages(Fdo, Buffer, InLen, OutLen);
         break;
 
     default:

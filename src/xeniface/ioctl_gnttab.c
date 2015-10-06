@@ -140,14 +140,14 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabPermitForeignAccess(
     __in     PXENIFACE_FDO  Fdo,
-    __in     PCHAR          Buffer,
+    __in     PVOID          Buffer,
     __in     ULONG          InLen,
     __in     ULONG          OutLen,
     __inout  PIRP           Irp
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In = (PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN)Buffer;
+    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In = Buffer;
     PXENIFACE_GRANT_CONTEXT Context;
     ULONG Page;
 
@@ -307,15 +307,15 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabGetGrantResult(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __out PULONG_PTR        Info
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN In = (PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN)Buffer;
-    PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT Out = (PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT)Buffer;
+    PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN In = Buffer;
+    PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT Out = Buffer;
     XENIFACE_CONTEXT_ID Id;
     KIRQL Irql;
     PIRP Irp;
@@ -374,8 +374,8 @@ fail1:
 _IRQL_requires_max_(APC_LEVEL)
 VOID
 GnttabFreeGrant(
-__in PXENIFACE_FDO Fdo,
-__in PXENIFACE_GRANT_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_GRANT_CONTEXT Context
 )
 {
     NTSTATUS status;
@@ -426,13 +426,13 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabRevokeForeignAccess(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN In = (PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN)Buffer;
+    PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN In = Buffer;
     PXENIFACE_GRANT_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;
@@ -473,15 +473,15 @@ fail1:
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabMapForeignPages(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
-    __in  ULONG             InLen,
-    __in  ULONG             OutLen,
+    __in     PXENIFACE_FDO     Fdo,
+    __in     PVOID             Buffer,
+    __in     ULONG             InLen,
+    __in     ULONG             OutLen,
     __inout  PIRP           Irp
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN In = (PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN In = Buffer;
     PXENIFACE_MAP_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
@@ -621,15 +621,15 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabGetMapResult(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __out PULONG_PTR        Info
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_GET_MAP_RESULT_IN In = (PXENIFACE_GNTTAB_GET_MAP_RESULT_IN)Buffer;
-    PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out = (PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT)Buffer;
+    PXENIFACE_GNTTAB_GET_MAP_RESULT_IN In = Buffer;
+    PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out = Buffer;
     XENIFACE_CONTEXT_ID Id;
     KIRQL Irql;
     PIRP Irp;
@@ -676,8 +676,8 @@ _IRQL_requires_max_(APC_LEVEL)
 DECLSPEC_NOINLINE
 VOID
 GnttabFreeMap(
-    __in  PXENIFACE_FDO Fdo,
-    __in  PXENIFACE_MAP_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_MAP_CONTEXT Context
     )
 {
     NTSTATUS status;
@@ -720,13 +720,13 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabUnmapForeignPages(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN In = (PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN)Buffer;
+    PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN In = Buffer;
     PXENIFACE_MAP_CONTEXT Context = NULL;
     XENIFACE_CONTEXT_ID Id;
     PIRP PendingIrp;

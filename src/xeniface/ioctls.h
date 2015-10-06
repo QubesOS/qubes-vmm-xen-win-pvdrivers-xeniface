@@ -93,15 +93,15 @@ typedef struct _XENIFACE_MAP_CONTEXT {
 
 NTSTATUS
 XenIfaceIoctl(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PIRP              Irp
+    __in     PXENIFACE_FDO     Fdo,
+    __inout  PIRP              Irp
     );
 
 _IRQL_requires_(PASSIVE_LEVEL)
 VOID
 XenIfaceCleanup(
-    PXENIFACE_FDO Fdo,
-    PFILE_OBJECT  FileObject
+    __in  PXENIFACE_FDO Fdo,
+    __in  PFILE_OBJECT  FileObject
     );
 
 DECLSPEC_NOINLINE
@@ -146,7 +146,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreSetPermissions(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     );
@@ -155,7 +155,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreAddWatch(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject,
@@ -166,7 +166,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreRemoveWatch(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject
@@ -175,15 +175,15 @@ IoctlStoreRemoveWatch(
 _IRQL_requires_max_(DISPATCH_LEVEL)
 VOID
 StoreFreeWatch(
-    __in  PXENIFACE_FDO Fdo,
-    __in  PXENIFACE_STORE_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_STORE_CONTEXT Context
     );
 
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlEvtchnBindUnbound(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject,
@@ -194,7 +194,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlEvtchnBindInterdomain(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject,
@@ -205,7 +205,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlEvtchnClose(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject
@@ -215,7 +215,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlEvtchnNotify(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject
@@ -225,7 +225,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlEvtchnUnmask(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __in  PFILE_OBJECT      FileObject
@@ -245,24 +245,24 @@ _IRQL_requires_(DISPATCH_LEVEL)
 _IRQL_requires_same_
 VOID
 EvtchnNotificationDpc(
-    __in     PKDPC Dpc,
-    __in_opt PVOID Context,
-    __in_opt PVOID Argument1,
-    __in_opt PVOID Argument2
+    __in      PKDPC Dpc,
+    __in_opt  PVOID Context,
+    __in_opt  PVOID Argument1,
+    __in_opt  PVOID Argument2
     );
 
 _IRQL_requires_(PASSIVE_LEVEL)
 VOID
 EvtchnFree(
-    __in PXENIFACE_FDO Fdo,
-    __in PXENIFACE_EVTCHN_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_EVTCHN_CONTEXT Context
     );
 
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabPermitForeignAccess(
     __in     PXENIFACE_FDO  Fdo,
-    __in     PCHAR          Buffer,
+    __in     PVOID          Buffer,
     __in     ULONG          InLen,
     __in     ULONG          OutLen,
     __inout  PIRP           Irp
@@ -272,7 +272,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabGetGrantResult(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __out PULONG_PTR        Info
@@ -282,7 +282,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabRevokeForeignAccess(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     );
@@ -290,18 +290,18 @@ IoctlGnttabRevokeForeignAccess(
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabMapForeignPages(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
-    __in  ULONG             InLen,
-    __in  ULONG             OutLen,
-    __inout  PIRP           Irp
+    __in     PXENIFACE_FDO     Fdo,
+    __in     PVOID             Buffer,
+    __in     ULONG             InLen,
+    __in     ULONG             OutLen,
+    __inout  PIRP              Irp
     );
 
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabGetMapResult(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen,
     __out PULONG_PTR        Info
@@ -311,7 +311,7 @@ DECLSPEC_NOINLINE
 NTSTATUS
 IoctlGnttabUnmapForeignPages(
     __in  PXENIFACE_FDO     Fdo,
-    __in  PCHAR             Buffer,
+    __in  PVOID             Buffer,
     __in  ULONG             InLen,
     __in  ULONG             OutLen
     );
@@ -320,14 +320,14 @@ _Acquires_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabAcquireLock(
-    __in PVOID Argument
+    __in  PVOID Argument
     );
 
 _Releases_exclusive_lock_(((PXENIFACE_FDO)Argument)->GnttabCacheLock)
 _IRQL_requires_(DISPATCH_LEVEL)
 VOID
 GnttabReleaseLock(
-    __in PVOID Argument
+    __in  PVOID Argument
     );
 
 _Function_class_(IO_WORKITEM_ROUTINE)
@@ -340,15 +340,15 @@ CompleteGnttabIrp(
 _IRQL_requires_max_(APC_LEVEL)
 VOID
 GnttabFreeGrant(
-    __in PXENIFACE_FDO Fdo,
-    __in PXENIFACE_GRANT_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_GRANT_CONTEXT Context
     );
 
 _IRQL_requires_max_(APC_LEVEL)
 VOID
 GnttabFreeMap(
-    __in PXENIFACE_FDO Fdo,
-    __in PXENIFACE_MAP_CONTEXT Context
+    __in     PXENIFACE_FDO Fdo,
+    __inout  PXENIFACE_MAP_CONTEXT Context
     );
 
 #endif // _IOCTLS_H_
