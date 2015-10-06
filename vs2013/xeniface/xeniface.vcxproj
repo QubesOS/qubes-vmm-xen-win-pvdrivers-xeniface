@@ -152,9 +152,6 @@
   <ItemGroup>
     <Inf Include="..\xeniface.inf" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\..\include\irp_queue.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ProjectExtensions>
     <VisualStudio>
