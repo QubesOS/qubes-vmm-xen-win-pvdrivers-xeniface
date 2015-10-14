@@ -334,6 +334,7 @@ IoctlGnttabGetGrantResult(
     PIRP Irp;
     PXENIFACE_CONTEXT_ID ContextId;
     PXENIFACE_GRANT_CONTEXT Context;
+    ULONG Page;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_IN))
@@ -356,13 +357,13 @@ IoctlGnttabGetGrantResult(
     Context = CONTAINING_RECORD(ContextId, XENIFACE_GRANT_CONTEXT, Id);
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (OutLen != (sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT) + sizeof(ULONG) * Context->NumberPages))
+    if (OutLen != (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT, References[Context->NumberPages]))
         goto fail3;
 
     Out->Address = Context->UserVa;
     XenIfaceDebugPrint(TRACE, "< Address %p, Irp %p\n", Context->UserVa, Irp);
 
-    for (ULONG Page = 0; Page < Context->NumberPages; Page++) {
+    for (Page = 0; Page < Context->NumberPages; Page++) {
         Out->References[Page] = XENBUS_GNTTAB(GetReference,
                                               &Fdo->GnttabInterface,
                                               Context->Grants[Page]);
@@ -519,7 +520,7 @@ IoctlGnttabMapForeignPages(
     }
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) + sizeof(ULONG) * In->NumberPages)
+    if (InLen != (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, References[In->NumberPages]))
         goto fail3;
 
     status = STATUS_NO_MEMORY;

@@ -414,7 +414,7 @@ XcGnttabPermitForeignAccess(
     In1.NotifyPort = NotifyPort;
     In1.Flags = Flags;
 
-    Size = sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT) + NumberPages * sizeof(ULONG);
+    Size = (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT, References[NumberPages]);
     Out2 = malloc(Size);
     Request = malloc(sizeof(*Request));
 
@@ -554,7 +554,7 @@ XcGnttabMapForeignPages(
     EnterCriticalSection(&Xc->RequestListLock);
 
     Status = ERROR_OUTOFMEMORY;
-    Size = sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) + NumberPages * sizeof(ULONG);
+    Size = (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, References[NumberPages]);
     In1 = malloc(Size);
     Request = malloc(sizeof(*Request));
     if (!In1 || !Request)
@@ -832,7 +832,7 @@ XcStoreSetPermissions(
     for (ULONG i = 0; i < Count; i++)
         Log(XLL_DEBUG, L"Domain: %d, Mask: 0x%x", Permissions[i].Domain, Permissions[i].Mask);
 
-    Size = sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) + Count * sizeof(XENBUS_STORE_PERMISSION);
+    Size = (ULONG)FIELD_OFFSET(XENIFACE_STORE_SET_PERMISSIONS_IN, Permissions[Count]);
     In = malloc(Size);
     if (!In) {
         SetLastError(ERROR_OUTOFMEMORY);

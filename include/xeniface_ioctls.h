@@ -72,15 +72,12 @@ typedef struct _XENBUS_STORE_PERMISSION {
 #define IOCTL_XENIFACE_STORE_SET_PERMISSIONS \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#pragma warning(push)
-#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
 typedef struct _XENIFACE_STORE_SET_PERMISSIONS_IN {
     PCHAR Path;
     ULONG PathLength; // number of bytes, including the null terminator
     ULONG NumberPermissions;
-    XENBUS_STORE_PERMISSION Permissions[0];
+    XENBUS_STORE_PERMISSION Permissions[ANYSIZE_ARRAY];
 } XENIFACE_STORE_SET_PERMISSIONS_IN, *PXENIFACE_STORE_SET_PERMISSIONS_IN;
-#pragma warning(pop)
 
 #define IOCTL_XENIFACE_STORE_ADD_WATCH \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -183,13 +180,10 @@ typedef struct _XENIFACE_GNTTAB_GET_GRANT_RESULT_IN {
     ULONG RequestId;
 } XENIFACE_GNTTAB_GET_GRANT_RESULT_IN, *PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN;
 
-#pragma warning(push)
-#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
 typedef struct _XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT {
     PVOID Address;
-    ULONG References[0];
+    ULONG References[ANYSIZE_ARRAY];
 } XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT, *PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT;
-#pragma warning(pop)
 
 #define IOCTL_XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x822, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -203,8 +197,6 @@ typedef struct _XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN {
 #define IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x823, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#pragma warning(push)
-#pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
 typedef struct _XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN {
     ULONG RequestId; // should be unique for each request
     USHORT RemoteDomain;
@@ -212,9 +204,8 @@ typedef struct _XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN {
     XENIFACE_GNTTAB_PAGE_FLAGS Flags;
     ULONG NotifyOffset;
     ULONG NotifyPort;
-    ULONG References[0];
+    ULONG References[ANYSIZE_ARRAY];
 } XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, *PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN;
-#pragma warning(pop)
 
 #define IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x824, METHOD_BUFFERED, FILE_ANY_ACCESS)

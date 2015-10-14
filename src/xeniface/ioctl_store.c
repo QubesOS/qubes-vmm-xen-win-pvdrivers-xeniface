@@ -365,7 +365,7 @@ IoctlStoreSetPermissions(
         goto fail1;
     }
 
-    if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
+    if (InLen != (ULONG)FIELD_OFFSET(XENIFACE_STORE_SET_PERMISSIONS_IN, Permissions[In->NumberPermissions]))
         goto fail2;
 
     status = STATUS_INVALID_PARAMETER;
