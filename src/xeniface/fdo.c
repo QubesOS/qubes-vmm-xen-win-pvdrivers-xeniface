@@ -2027,8 +2027,8 @@ FdoDispatchDefault(
 
 NTSTATUS
 FdoCreateFile (
-    __in PXENIFACE_FDO Fdo,
-    __inout PIRP Irp
+    __in PXENIFACE_FDO  Fdo,
+    __inout PIRP        Irp
     )
 {
     PIO_STACK_LOCATION  Stack = IoGetCurrentIrpStackLocation(Irp);
@@ -2045,7 +2045,7 @@ FdoCreateFile (
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = 0;
     Irp->IoStatus.Status = status;
-    IoCompleteRequest (Irp, IO_NO_INCREMENT);
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
 
     return status;
 }
@@ -2053,8 +2053,8 @@ FdoCreateFile (
 
 NTSTATUS
 FdoClose (
-    __in PXENIFACE_FDO Fdo,
-    __inout PIRP Irp
+    __in PXENIFACE_FDO  Fdo,
+    __inout PIRP        Irp
     )
 
 {
@@ -2068,7 +2068,7 @@ FdoClose (
     status = STATUS_SUCCESS;
     Irp->IoStatus.Information = 0;
     Irp->IoStatus.Status = status;
-    IoCompleteRequest (Irp, IO_NO_INCREMENT);
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
 
     return status;
 }

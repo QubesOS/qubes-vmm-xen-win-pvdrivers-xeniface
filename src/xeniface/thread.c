@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 
-#include <ntifs.h>
+#include <ntddk.h>
 #include <util.h>
 
 #include "thread.h"

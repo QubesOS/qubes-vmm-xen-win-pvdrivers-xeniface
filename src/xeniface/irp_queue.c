@@ -83,8 +83,8 @@ _IRQL_requires_max_(DISPATCH_LEVEL)
 _Acquires_lock_(CONTAINING_RECORD(Csq, XENIFACE_FDO, IrpQueue)->IrpQueueLock)
 VOID
 CsqAcquireLock(
-    _In_  PIO_CSQ Csq,
-    _Out_ PKIRQL  Irql
+    _In_                                       PIO_CSQ Csq,
+    _Out_ _At_(*Irql, _Post_ _IRQL_saves_)     PKIRQL  Irql
     )
 {
     PXENIFACE_FDO Fdo;
@@ -98,8 +98,8 @@ _IRQL_requires_(DISPATCH_LEVEL)
 _Releases_lock_(CONTAINING_RECORD(Csq, XENIFACE_FDO, IrpQueue)->IrpQueueLock)
 VOID
 CsqReleaseLock(
-    _In_  PIO_CSQ Csq,
-    _In_  KIRQL   Irql
+    _In_                    PIO_CSQ Csq,
+    _In_ _IRQL_restores_    KIRQL   Irql
     )
 {
     PXENIFACE_FDO Fdo;

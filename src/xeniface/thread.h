@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_THREAD_H
 #define _XENIFACE_THREAD_H
 
-#include <ntifs.h>
+#include <ntddk.h>
 
 typedef struct _XENIFACE_THREAD XENIFACE_THREAD, *PXENIFACE_THREAD;
 

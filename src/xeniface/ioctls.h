@@ -59,7 +59,6 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
     ULONG                  LocalPort;
     PKEVENT                Event;
     PXENIFACE_FDO          Fdo;
-    BOOLEAN                Active;
     PVOID                  FileObject;
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 

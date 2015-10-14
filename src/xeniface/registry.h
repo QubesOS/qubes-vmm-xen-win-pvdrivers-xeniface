@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_REGISTRY_H
 #define _XENIFACE_REGISTRY_H
 
-#include <ntifs.h>
+#include <ntddk.h>
 
 extern NTSTATUS
 RegistryInitialize(

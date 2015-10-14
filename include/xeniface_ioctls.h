@@ -38,7 +38,7 @@ DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
 /************************************************************************/
 /* store ioctls                                                         */
 /************************************************************************/
-// define only for user mode clients
+// Define only for user mode clients.
 #ifndef XENIFACE_KERNEL_MODE
 
 typedef enum _XENBUS_STORE_PERMISSION_MASK {
@@ -156,6 +156,8 @@ typedef struct _XENIFACE_EVTCHN_UNMASK_IN {
 /************************************************************************/
 /* gntmem ioctls                                                        */
 /************************************************************************/
+// This IOCTL is pended forever, use IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT
+// to get the result. This IOCTL must be asynchronous.
 #define IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x820, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
@@ -166,7 +168,7 @@ typedef enum _XENIFACE_GNTTAB_PAGE_FLAGS {
 } XENIFACE_GNTTAB_PAGE_FLAGS;
 
 typedef struct _XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN {
-    ULONG RequestId;
+    ULONG RequestId; // should be unique for each request
     USHORT RemoteDomain;
     ULONG NumberPages;
     XENIFACE_GNTTAB_PAGE_FLAGS Flags;
@@ -196,13 +198,15 @@ typedef struct _XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN {
     ULONG RequestId;
 } XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN, *PXENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS_IN;
 
+// This IOCTL is pended forever, use IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT
+// to get the result. This IOCTL must be asynchronous.
 #define IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x823, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #pragma warning(push)
 #pragma warning(disable:4200) // nonstandard extension used : zero-sized array in struct/union
 typedef struct _XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN {
-    ULONG RequestId;
+    ULONG RequestId; // should be unique for each request
     USHORT RemoteDomain;
     ULONG NumberPages;
     XENIFACE_GNTTAB_PAGE_FLAGS Flags;
@@ -231,3 +235,4 @@ typedef struct _XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN {
 } XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN, *PXENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN;
 
 #endif // _XENIFACE_IOCTLS_H_
+

@@ -32,7 +32,7 @@
 #ifndef _XENVIF_NAMES_H_
 #define _XENVIF_NAMES_H_
 
-#include <ntifs.h>
+#include <ntddk.h>
 
 #include "types.h"
 

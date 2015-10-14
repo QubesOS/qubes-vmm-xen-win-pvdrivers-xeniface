@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_MUTEX_H
 #define _XENIFACE_MUTEX_H
 
-#include <ntifs.h>
+#include <ntddk.h>
 
 #include "assert.h"
 

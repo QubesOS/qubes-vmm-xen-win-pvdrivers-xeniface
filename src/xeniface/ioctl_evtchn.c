@@ -54,17 +54,15 @@ EvtchnNotificationDpc(
     ASSERT(Context);
 
 #if DBG
-    XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, Active %d, Cpu %lu\n",
-                       Context->Channel, Context->LocalPort, Context->Active, KeGetCurrentProcessorNumber());
+    XenIfaceDebugPrint(INFO, "Channel %p, LocalPort %d, Cpu %lu\n",
+                       Context->Channel, Context->LocalPort, KeGetCurrentProcessorNumber());
 #endif
-    if (Context->Active) {
-        KeSetEvent(Context->Event, 0, FALSE);
+    KeSetEvent(Context->Event, 0, FALSE);
 
-        XENBUS_EVTCHN(Unmask,
-                      &Context->Fdo->EvtchnInterface,
-                      Context->Channel,
-                      FALSE);
-    }
+    XENBUS_EVTCHN(Unmask,
+                    &Context->Fdo->EvtchnInterface,
+                    Context->Channel,
+                    FALSE);
 }
 
 _Function_class_(KSERVICE_ROUTINE)
@@ -86,8 +84,8 @@ EvtchnInterruptHandler(
 
     KeGetCurrentProcessorNumberEx(&ProcNumber);
     ProcIndex = KeGetProcessorIndexFromNumber(&ProcNumber);
-    if (Context->Active)
-        KeInsertQueueDpc(&Context->Fdo->EvtchnDpc[ProcIndex], Context, NULL);
+    if (!KeInsertQueueDpc(&Context->Fdo->EvtchnDpc[ProcIndex], Context, NULL))
+        XenIfaceDebugPrint(TRACE, "NOT INSERTED: Context %p, Port %lu, FO %p, Cpu %lu\n", Context, Context->LocalPort, ProcIndex, Context->FileObject);
 
     return TRUE;
 }
@@ -103,8 +101,6 @@ EvtchnFree(
 
     XenIfaceDebugPrint(TRACE, "Context %p, LocalPort %d, FO %p\n",
                        Context, Context->LocalPort, Context->FileObject);
-
-    InterlockedExchange8(&Context->Active, 0);
 
     XENBUS_EVTCHN(Close,
                   &Fdo->EvtchnInterface,
@@ -203,7 +199,6 @@ IoctlEvtchnBindUnbound(
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
-    InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
     *Info = sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_OUT);
 
@@ -286,7 +281,6 @@ IoctlEvtchnBindInterdomain(
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
-    InterlockedExchange8(&Context->Active, 1);
     Out->LocalPort = Context->LocalPort;
     *Info = sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT);
 

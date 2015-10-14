@@ -32,7 +32,7 @@
 #ifndef _XENIFACE_LOG_H
 #define _XENIFACE_LOG_H
 
-#include <ntifs.h>
+#include <ntddk.h>
 #include <stdarg.h>
 
 #define     ERROR    DPFLTR_ERROR_LEVEL
