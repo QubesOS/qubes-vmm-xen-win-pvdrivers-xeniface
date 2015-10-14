@@ -31,7 +31,7 @@
 
 #include "driver.h"
 #include "ioctls.h"
-#include "..\..\include\xeniface_ioctls.h"
+#include "xeniface_ioctls.h"
 #include "log.h"
 
 _Function_class_(KDEFERRED_ROUTINE)
@@ -45,7 +45,7 @@ EvtchnNotificationDpc(
     __in_opt  PVOID Argument2
     )
 {
-    PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument1;
+    PXENIFACE_EVTCHN_CONTEXT Context = Argument1;
 
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(_Context);
@@ -60,9 +60,9 @@ EvtchnNotificationDpc(
     KeSetEvent(Context->Event, 0, FALSE);
 
     XENBUS_EVTCHN(Unmask,
-                    &Context->Fdo->EvtchnInterface,
-                    Context->Channel,
-                    FALSE);
+                  &Context->Fdo->EvtchnInterface,
+                  Context->Channel,
+                  FALSE);
 }
 
 _Function_class_(KSERVICE_ROUTINE)
@@ -75,7 +75,7 @@ EvtchnInterruptHandler(
     __in_opt  PVOID Argument
     )
 {
-    PXENIFACE_EVTCHN_CONTEXT Context = (PXENIFACE_EVTCHN_CONTEXT)Argument;
+    PXENIFACE_EVTCHN_CONTEXT Context = Argument;
     PROCESSOR_NUMBER ProcNumber;
     ULONG ProcIndex;
 
@@ -84,8 +84,10 @@ EvtchnInterruptHandler(
 
     KeGetCurrentProcessorNumberEx(&ProcNumber);
     ProcIndex = KeGetProcessorIndexFromNumber(&ProcNumber);
-    if (!KeInsertQueueDpc(&Context->Fdo->EvtchnDpc[ProcIndex], Context, NULL))
-        XenIfaceDebugPrint(TRACE, "NOT INSERTED: Context %p, Port %lu, FO %p, Cpu %lu\n", Context, Context->LocalPort, ProcIndex, Context->FileObject);
+    if (!KeInsertQueueDpc(&Context->Fdo->EvtchnDpc[ProcIndex], Context, NULL)) {
+        XenIfaceDebugPrint(TRACE, "NOT INSERTED: Context %p, Port %lu, FO %p, Cpu %lu\n",
+                           Context, Context->LocalPort, Context->FileObject, ProcIndex);
+    }
 
     return TRUE;
 }
@@ -135,8 +137,10 @@ EvtchnFindChannel(
         if (Context->LocalPort != LocalPort)
             continue;
 
-        if (FileObject != NULL && Context->FileObject != FileObject)
+        if (FileObject != NULL &&
+            FileObject != Context->FileObject) {
             continue;
+        }
 
         Found = Context;
         break;
@@ -162,8 +166,10 @@ IoctlEvtchnBindUnbound(
     PXENIFACE_EVTCHN_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_IN) || OutLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_OUT))
+    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_IN) ||
+        OutLen != sizeof(XENIFACE_EVTCHN_BIND_UNBOUND_OUT)) {
         goto fail1;
+    }
 
     status = STATUS_NO_MEMORY;
     Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_EVTCHN_CONTEXT), XENIFACE_POOL_TAG);
@@ -176,7 +182,12 @@ IoctlEvtchnBindUnbound(
     XenIfaceDebugPrint(TRACE, "> RemoteDomain %d, Mask %d, FO %p\n",
                        In->RemoteDomain, In->Mask, FileObject);
 
-    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    status = ObReferenceObjectByHandle(In->Event,
+                                       EVENT_MODIFY_STATE,
+                                       *ExEventObjectType,
+                                       UserMode,
+                                       &Context->Event,
+                                       NULL);
     if (!NT_SUCCESS(status))
         goto fail3;
 
@@ -215,12 +226,15 @@ IoctlEvtchnBindUnbound(
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
     ObDereferenceObject(Context->Event);
+
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -243,8 +257,10 @@ IoctlEvtchnBindInterdomain(
     PXENIFACE_EVTCHN_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_IN) || OutLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT))
+    if (InLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_IN) ||
+        OutLen != sizeof(XENIFACE_EVTCHN_BIND_INTERDOMAIN_OUT)) {
         goto fail1;
+    }
 
     status = STATUS_NO_MEMORY;
     Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_EVTCHN_CONTEXT), XENIFACE_POOL_TAG);
@@ -257,7 +273,12 @@ IoctlEvtchnBindInterdomain(
     XenIfaceDebugPrint(TRACE, "> RemoteDomain %d, RemotePort %lu, Mask %d, FO %p\n",
                        In->RemoteDomain, In->RemotePort, In->Mask, FileObject);
 
-    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    status = ObReferenceObjectByHandle(In->Event,
+                                       EVENT_MODIFY_STATE,
+                                       *ExEventObjectType,
+                                       UserMode,
+                                       &Context->Event,
+                                       NULL);
     if (!NT_SUCCESS(status))
         goto fail3;
 
@@ -298,12 +319,15 @@ IoctlEvtchnBindInterdomain(
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
     ObDereferenceObject(Context->Event);
+
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
     RtlZeroMemory(Context, sizeof(XENIFACE_EVTCHN_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -321,31 +345,33 @@ IoctlEvtchnClose(
 {
     NTSTATUS status;
     PXENIFACE_EVTCHN_CLOSE_IN In = Buffer;
-    PXENIFACE_EVTCHN_CONTEXT Context = NULL;
+    PXENIFACE_EVTCHN_CONTEXT Context;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_EVTCHN_CLOSE_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_CLOSE_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     XenIfaceDebugPrint(TRACE, "> LocalPort %lu, FO %p\n", In->LocalPort, FileObject);
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
-    Context = EvtchnFindChannel(Fdo, In->LocalPort, FileObject);
-    if (Context != NULL)
-        RemoveEntryList(&Context->Entry);
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
-    if (Context != NULL)
-        EvtchnFree(Fdo, Context);
-
     status = STATUS_NOT_FOUND;
+    Context = EvtchnFindChannel(Fdo, In->LocalPort, FileObject);
     if (Context == NULL)
         goto fail2;
+
+    RemoveEntryList(&Context->Entry);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+    EvtchnFree(Fdo, Context);
 
     return STATUS_SUCCESS;
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -361,7 +387,7 @@ EvtchnNotify(
     )
 {
     NTSTATUS status;
-    PXENIFACE_EVTCHN_CONTEXT Context = NULL;
+    PXENIFACE_EVTCHN_CONTEXT Context;
     KIRQL Irql;
 
     KeAcquireSpinLock(&Fdo->EvtchnLock, &Irql);
@@ -381,8 +407,8 @@ EvtchnNotify(
     return STATUS_SUCCESS;
 
 fail1:
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
     return status;
 }
 
@@ -400,8 +426,11 @@ IoctlEvtchnNotify(
     PXENIFACE_EVTCHN_NOTIFY_IN In = Buffer;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_EVTCHN_NOTIFY_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_NOTIFY_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
+
 #if DBG
     XenIfaceDebugPrint(INFO, "> LocalPort %d, FO %p\n", In->LocalPort, FileObject);
 #endif
@@ -425,12 +454,14 @@ IoctlEvtchnUnmask(
 {
     NTSTATUS status;
     PXENIFACE_EVTCHN_UNMASK_IN In = Buffer;
-    PXENIFACE_EVTCHN_CONTEXT Context = NULL;
+    PXENIFACE_EVTCHN_CONTEXT Context;
     KIRQL Irql;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_EVTCHN_UNMASK_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_EVTCHN_UNMASK_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     XenIfaceDebugPrint(TRACE, "> LocalPort %d, FO %p\n", In->LocalPort, FileObject);
 
@@ -452,8 +483,8 @@ IoctlEvtchnUnmask(
     return STATUS_SUCCESS;
 
 fail2:
-    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+    KeReleaseSpinLock(&Fdo->EvtchnLock, Irql);
 
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);

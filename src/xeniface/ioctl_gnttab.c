@@ -31,7 +31,7 @@
 
 #include "driver.h"
 #include "ioctls.h"
-#include "..\..\include\xeniface_ioctls.h"
+#include "xeniface_ioctls.h"
 #include "log.h"
 #include "irp_queue.h"
 
@@ -152,14 +152,21 @@ IoctlGnttabPermitForeignAccess(
     ULONG Page;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     status = STATUS_INVALID_PARAMETER;
-    if ((In->NumberPages == 0) || (In->NumberPages > 1024 * 1024) ||
-        ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
-        )
+    if (In->NumberPages == 0 ||
+        In->NumberPages > 1024 * 1024) {
         goto fail2;
+    }
+
+    if ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) &&
+        (In->NotifyOffset >= In->NumberPages * PAGE_SIZE)) {
+        goto fail2;
+    }
 
     status = STATUS_NO_MEMORY;
     Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_GRANT_CONTEXT), XENIFACE_POOL_TAG);
@@ -180,7 +187,7 @@ IoctlGnttabPermitForeignAccess(
                        Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort,
                        Context->Id.Process, Context->Id.RequestId);
 
-    // Check if the request ID is unique.
+    // Check if the request ID is unique for this process.
     // This doesn't protect us from simultaneous requests with the same ID arriving here
     // but another check for duplicate ID is performed when the context/IRP is queued at the end.
     // Ideally we would lock the whole section but that's not really an option since we touch user memory.
@@ -230,7 +237,12 @@ IoctlGnttabPermitForeignAccess(
     // map into user mode
 #pragma prefast(suppress:6320) // we want to catch all exceptions
     __try {
-        Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
+        Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl,
+                                                       UserMode,
+                                                       MmCached,
+                                                       NULL,
+                                                       FALSE,
+                                                       NormalPagePriority);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
@@ -241,10 +253,11 @@ IoctlGnttabPermitForeignAccess(
     if (Context->UserVa == NULL)
         goto fail10;
 
-    XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n", Context, Irp, Context->KernelVa, Context->UserVa);
+    XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n",
+                       Context, Irp, Context->KernelVa, Context->UserVa);
     
     // Insert the IRP/context into the pending queue.
-    // This also checks (again) if the request ID is unique.
+    // This also checks (again) if the request ID is unique for the calling process.
     Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
@@ -363,9 +376,11 @@ IoctlGnttabGetGrantResult(
 
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
     CsqReleaseLock(&Fdo->IrpQueue, Irql);
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -374,8 +389,8 @@ fail1:
 _IRQL_requires_max_(APC_LEVEL)
 VOID
 GnttabFreeGrant(
-    __in     PXENIFACE_FDO Fdo,
-    __inout  PXENIFACE_GRANT_CONTEXT Context
+    __in     PXENIFACE_FDO            Fdo,
+    __inout  PXENIFACE_GRANT_CONTEXT  Context
 )
 {
     NTSTATUS status;
@@ -465,6 +480,7 @@ IoctlGnttabRevokeForeignAccess(
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -477,22 +493,30 @@ IoctlGnttabMapForeignPages(
     __in     PVOID             Buffer,
     __in     ULONG             InLen,
     __in     ULONG             OutLen,
-    __inout  PIRP           Irp
+    __inout  PIRP              Irp
     )
 {
     NTSTATUS status;
     PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN In = Buffer;
+    ULONG PageIndex;
     PXENIFACE_MAP_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen < sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) || OutLen != 0)
+    if (InLen < sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     status = STATUS_INVALID_PARAMETER;
-    if ((In->NumberPages == 0) || (In->NumberPages > 1024 * 1024) ||
-        ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) && (In->NotifyOffset >= In->NumberPages * PAGE_SIZE))
-        )
+    if (In->NumberPages == 0 ||
+        In->NumberPages > 1024 * 1024) {
         goto fail2;
+    }
+
+    if ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) &&
+        (In->NotifyOffset >= In->NumberPages * PAGE_SIZE)) {
+        goto fail2;
+    }
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) + sizeof(ULONG) * In->NumberPages)
@@ -517,8 +541,8 @@ IoctlGnttabMapForeignPages(
                        Context->RemoteDomain, Context->NumberPages, Context->Flags, Context->NotifyOffset, Context->NotifyPort,
                        Context->Id.Process, Context->Id.RequestId);
 
-    for (ULONG i = 0; i < In->NumberPages; i++)
-        XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[i]);
+    for (PageIndex = 0; PageIndex < In->NumberPages; PageIndex++)
+        XenIfaceDebugPrint(INFO, "> Ref %d\n", In->References[PageIndex]);
 
     status = STATUS_INVALID_PARAMETER;
     if (FindGnttabIrp(Fdo, &Context->Id) != NULL)
@@ -550,7 +574,12 @@ IoctlGnttabMapForeignPages(
     // map into user mode
 #pragma prefast(suppress: 6320) // we want to catch all exceptions
     __try {
-        Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl, UserMode, MmCached, NULL, FALSE, NormalPagePriority);
+        Context->UserVa = MmMapLockedPagesSpecifyCache(Context->Mdl,
+                                                       UserMode,
+                                                       MmCached,
+                                                       NULL,
+                                                       FALSE,
+                                                       NormalPagePriority);
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
@@ -565,7 +594,7 @@ IoctlGnttabMapForeignPages(
                        Context, Irp, Context->Address, Context->KernelVa, Context->UserVa);
 
     // Insert the IRP/context into the pending queue.
-    // This also checks (again) if the request ID is unique.
+    // This also checks (again) if the request ID is unique for the calling process.
     Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
@@ -637,8 +666,10 @@ IoctlGnttabGetMapResult(
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_IN) || OutLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_OUT))
+    if (InLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_IN) ||
+        OutLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_OUT)) {
         goto fail1;
+    }
 
     Id.Type = XENIFACE_CONTEXT_MAP;
     Id.Process = PsGetCurrentProcess();
@@ -667,6 +698,7 @@ IoctlGnttabGetMapResult(
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
     CsqReleaseLock(&Fdo->IrpQueue, Irql);
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -676,8 +708,8 @@ _IRQL_requires_max_(APC_LEVEL)
 DECLSPEC_NOINLINE
 VOID
 GnttabFreeMap(
-    __in     PXENIFACE_FDO Fdo,
-    __inout  PXENIFACE_MAP_CONTEXT Context
+    __in     PXENIFACE_FDO            Fdo,
+    __inout  PXENIFACE_MAP_CONTEXT    Context
     )
 {
     NTSTATUS status;
@@ -733,8 +765,10 @@ IoctlGnttabUnmapForeignPages(
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN) && OutLen != 0)
+    if (InLen != sizeof(XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN) &&
+        OutLen != 0) {
         goto fail1;
+    }
 
     Id.Type = XENIFACE_CONTEXT_MAP;
     Id.Process = PsGetCurrentProcess();
@@ -759,6 +793,7 @@ IoctlGnttabUnmapForeignPages(
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;

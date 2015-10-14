@@ -31,7 +31,7 @@
 
 #include "driver.h"
 #include "ioctls.h"
-#include "..\..\include\xeniface_ioctls.h"
+#include "xeniface_ioctls.h"
 #include "log.h"
 
 #define XENSTORE_ABS_PATH_MAX 3072
@@ -360,15 +360,19 @@ IoctlStoreSetPermissions(
     PCHAR Path;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) || OutLen != 0)
+    if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     if (InLen < sizeof(XENIFACE_STORE_SET_PERMISSIONS_IN) + In->NumberPermissions * sizeof(XENBUS_STORE_PERMISSION))
         goto fail2;
 
     status = STATUS_INVALID_PARAMETER;
-    if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
+    if (In->PathLength == 0 ||
+        In->PathLength > XENSTORE_ABS_PATH_MAX) {
         goto fail3;
+    }
 
     status = __CaptureUserBuffer(In->Path, In->PathLength, &Path);
     if (!NT_SUCCESS(status))
@@ -378,7 +382,9 @@ IoctlStoreSetPermissions(
     XenIfaceDebugPrint(TRACE, "> Path '%s', NumberPermissions %lu\n", Path, In->NumberPermissions);
 
     for (Index = 0; Index < In->NumberPermissions; Index++) {
-        XenIfaceDebugPrint(TRACE, "> %lu: Domain %d, Mask 0x%x\n", Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
+        XenIfaceDebugPrint(TRACE, "> %lu: Domain %d, Mask 0x%x\n",
+                           Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
+
         if ((In->Permissions[Index].Mask & ~XENIFACE_STORE_ALLOWED_PERMISSIONS) != 0)
             goto fail5;
     }
@@ -399,15 +405,20 @@ IoctlStoreSetPermissions(
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
+
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
     __FreeCapturedBuffer(Path);
+
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
+
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -431,12 +442,16 @@ IoctlStoreAddWatch(
     PXENIFACE_STORE_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_STORE_ADD_WATCH_IN) || OutLen != sizeof(XENIFACE_STORE_ADD_WATCH_OUT))
+    if (InLen != sizeof(XENIFACE_STORE_ADD_WATCH_IN) ||
+        OutLen != sizeof(XENIFACE_STORE_ADD_WATCH_OUT)) {
         goto fail1;
+    }
 
     status = STATUS_INVALID_PARAMETER;
-    if (In->PathLength == 0 || In->PathLength > XENSTORE_ABS_PATH_MAX)
+    if (In->PathLength == 0 ||
+        In->PathLength > XENSTORE_ABS_PATH_MAX) {
         goto fail2;
+    }
 
     status = __CaptureUserBuffer(In->Path, In->PathLength, &Path);
     if (!NT_SUCCESS(status))
@@ -453,7 +468,12 @@ IoctlStoreAddWatch(
 
     Context->FileObject = FileObject;
 
-    status = ObReferenceObjectByHandle(In->Event, EVENT_MODIFY_STATE, *ExEventObjectType, UserMode, &Context->Event, NULL);
+    status = ObReferenceObjectByHandle(In->Event,
+                                       EVENT_MODIFY_STATE,
+                                       *ExEventObjectType,
+                                       UserMode,
+                                       &Context->Event,
+                                       NULL);
     if (!NT_SUCCESS(status))
         goto fail5;
 
@@ -483,17 +503,22 @@ IoctlStoreAddWatch(
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
     ObDereferenceObject(Context->Event);
+
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
     RtlZeroMemory(Context, sizeof(XENIFACE_STORE_CONTEXT));
     ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
+
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
     __FreeCapturedBuffer(Path);
+
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;
@@ -539,8 +564,10 @@ IoctlStoreRemoveWatch(
     PLIST_ENTRY Node;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_STORE_REMOVE_WATCH_IN) || OutLen != 0)
+    if (InLen != sizeof(XENIFACE_STORE_REMOVE_WATCH_IN) ||
+        OutLen != 0) {
         goto fail1;
+    }
 
     XenIfaceDebugPrint(TRACE, "> Context %p, FO %p\n", In->Context, FileObject);
 
@@ -550,8 +577,10 @@ IoctlStoreRemoveWatch(
         Context = CONTAINING_RECORD(Node, XENIFACE_STORE_CONTEXT, Entry);
 
         Node = Node->Flink;
-        if (Context != In->Context || Context->FileObject != FileObject)
+        if (Context != In->Context ||
+            Context->FileObject != FileObject) {
             continue;
+        }
 
         RemoveEntryList(&Context->Entry);
         break;
@@ -568,6 +597,7 @@ IoctlStoreRemoveWatch(
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
+
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
     return status;

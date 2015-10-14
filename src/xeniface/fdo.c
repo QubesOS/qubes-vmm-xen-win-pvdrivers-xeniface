@@ -2243,6 +2243,7 @@ FdoCreate(
     ULONG               Size;
     NTSTATUS            status;
     ULONG               ProcessorCount;
+    ULONG               Index;
 
 #pragma prefast(suppress:28197) // Possibly leaking memory 'FunctionDeviceObject'
     status = IoCreateDevice(DriverObject,
@@ -2384,19 +2385,21 @@ FdoCreate(
     if (!NT_SUCCESS(status))
         goto fail14;
 
-    ProcessorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    ProcessorCount = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
     status = STATUS_NO_MEMORY;
     Fdo->EvtchnDpc = __FdoAllocate(sizeof(KDPC) * ProcessorCount);
     if (Fdo->EvtchnDpc == NULL)
         goto fail15;
 
-    for (ULONG i = 0; i < ProcessorCount; i++) {
+    for (Index = 0; Index < ProcessorCount; Index++) {
         PROCESSOR_NUMBER ProcNumber;
 
-        status = KeGetProcessorNumberFromIndex(i, &ProcNumber);
+        status = KeGetProcessorNumberFromIndex(Index, &ProcNumber);
         ASSERT(NT_SUCCESS(status));
-        KeInitializeDpc(&Fdo->EvtchnDpc[i], EvtchnNotificationDpc, NULL);
-        status = KeSetTargetProcessorDpcEx(&Fdo->EvtchnDpc[i], &ProcNumber);
+
+        KeInitializeDpc(&Fdo->EvtchnDpc[Index], EvtchnNotificationDpc, NULL);
+        status = KeSetTargetProcessorDpcEx(&Fdo->EvtchnDpc[Index], &ProcNumber);
         ASSERT(NT_SUCCESS(status));
     }
 
@@ -2522,8 +2525,8 @@ FdoDestroy(
 
     Dx->Fdo = NULL;
 
-    ProcessorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
-    RtlZeroMemory(Fdo->EvtchnDpc, sizeof(KDPC)*ProcessorCount);
+    ProcessorCount = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    RtlZeroMemory(Fdo->EvtchnDpc, sizeof(KDPC) * ProcessorCount);
     __FdoFree(Fdo->EvtchnDpc);
 
     RtlZeroMemory(&Fdo->GnttabCacheLock, sizeof(KSPIN_LOCK));
