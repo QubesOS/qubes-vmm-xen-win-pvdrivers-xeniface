@@ -91,6 +91,18 @@ typedef struct _XENIFACE_MAP_CONTEXT {
 } XENIFACE_MAP_CONTEXT, *PXENIFACE_MAP_CONTEXT;
 
 NTSTATUS
+__CaptureUserBuffer(
+    __in  PVOID Buffer,
+    __in  ULONG Length,
+    __out PVOID *CapturedBuffer
+    );
+
+VOID
+__FreeCapturedBuffer(
+    __in  PVOID CapturedBuffer
+    );
+
+NTSTATUS
 XenIfaceIoctl(
     __in     PXENIFACE_FDO     Fdo,
     __inout  PIRP              Irp

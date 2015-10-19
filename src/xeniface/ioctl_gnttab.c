@@ -147,31 +147,39 @@ IoctlGnttabPermitForeignAccess(
     )
 {
     NTSTATUS status;
-    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In = Buffer;
+    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In;
+    PXENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_OUT Out = Irp->UserBuffer;
     PXENIFACE_GRANT_CONTEXT Context;
     ULONG Page;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN) ||
-        OutLen != 0) {
+    if (InLen != sizeof(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN))
         goto fail1;
-    }
+
+    // This IOCTL uses METHOD_NEITHER so we directly access user memory.
+    status = __CaptureUserBuffer(Buffer, InLen, &In);
+    if (!NT_SUCCESS(status))
+        goto fail2;
 
     status = STATUS_INVALID_PARAMETER;
     if (In->NumberPages == 0 ||
         In->NumberPages > 1024 * 1024) {
-        goto fail2;
+        goto fail3;
     }
 
     if ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) &&
         (In->NotifyOffset >= In->NumberPages * PAGE_SIZE)) {
-        goto fail2;
+        goto fail4;
     }
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (OutLen != (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_OUT, References[In->NumberPages]))
+        goto fail5;
 
     status = STATUS_NO_MEMORY;
     Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_GRANT_CONTEXT), XENIFACE_POOL_TAG);
     if (Context == NULL)
-        goto fail3;
+        goto fail6;
 
     RtlZeroMemory(Context, sizeof(XENIFACE_GRANT_CONTEXT));
     Context->Id.Type = XENIFACE_CONTEXT_GRANT;
@@ -193,12 +201,12 @@ IoctlGnttabPermitForeignAccess(
     // Ideally we would lock the whole section but that's not really an option since we touch user memory.
     status = STATUS_INVALID_PARAMETER;
     if (FindGnttabIrp(Fdo, &Context->Id) != NULL)
-        goto fail4;
+        goto fail7;
 
     status = STATUS_NO_MEMORY;
     Context->Grants = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY), XENIFACE_POOL_TAG);
     if (Context->Grants == NULL)
-        goto fail5;
+        goto fail8;
 
     RtlZeroMemory(Context->Grants, Context->NumberPages * sizeof(PXENBUS_GNTTAB_ENTRY));
 
@@ -206,12 +214,12 @@ IoctlGnttabPermitForeignAccess(
     status = STATUS_NO_MEMORY;
     Context->KernelVa = ExAllocatePoolWithTag(NonPagedPool, Context->NumberPages * PAGE_SIZE, XENIFACE_POOL_TAG);
     if (Context->KernelVa == NULL)
-        goto fail6;
+        goto fail9;
 
     RtlZeroMemory(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
     Context->Mdl = IoAllocateMdl(Context->KernelVa, Context->NumberPages * PAGE_SIZE, FALSE, FALSE, NULL);
     if (Context->Mdl == NULL)
-        goto fail7;
+        goto fail10;
 
     MmBuildMdlForNonPagedPool(Context->Mdl);
     ASSERT(MmGetMdlByteCount(Context->Mdl) == Context->NumberPages * PAGE_SIZE);
@@ -231,7 +239,7 @@ IoctlGnttabPermitForeignAccess(
 #pragma prefast(suppress:6385)
         XenIfaceDebugPrint(INFO, "Grants[%lu] = %p\n", Page, Context->Grants[Page]);
         if (!NT_SUCCESS(status))
-            goto fail8;
+            goto fail11;
     }
 
     // map into user mode
@@ -246,37 +254,59 @@ IoctlGnttabPermitForeignAccess(
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
-        goto fail9;
+        goto fail12;
     }
 
     status = STATUS_UNSUCCESSFUL;
     if (Context->UserVa == NULL)
-        goto fail10;
+        goto fail13;
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n",
                        Context, Irp, Context->KernelVa, Context->UserVa);
     
+    // Pass the result to user mode.
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
+    try {
+        ProbeForWrite(Out, OutLen, 1);
+        Out->Address = Context->UserVa;
+
+        for (Page = 0; Page < Context->NumberPages; Page++) {
+            Out->References[Page] = XENBUS_GNTTAB(GetReference,
+                                                  &Fdo->GnttabInterface,
+                                                  Context->Grants[Page]);
+        }
+    } except(EXCEPTION_EXECUTE_HANDLER) {
+        status = GetExceptionCode();
+        XenIfaceDebugPrint(ERROR, "Exception 0x%lx while probing/writing output buffer at %p, size 0x%lx\n", status, Out, OutLen);
+        goto fail14;
+    }
+
     // Insert the IRP/context into the pending queue.
     // This also checks (again) if the request ID is unique for the calling process.
     Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
-        goto fail11;
+        goto fail15;
+
+    __FreeCapturedBuffer(In);
 
     return STATUS_PENDING;
 
-fail11:
-    XenIfaceDebugPrint(ERROR, "Fail11\n");
+fail15:
+    XenIfaceDebugPrint(ERROR, "Fail15\n");
+
+fail14:
+    XenIfaceDebugPrint(ERROR, "Fail14\n");
     MmUnmapLockedPages(Context->UserVa, Context->Mdl);
 
-fail10:
-    XenIfaceDebugPrint(ERROR, "Fail10\n");
+fail13:
+    XenIfaceDebugPrint(ERROR, "Fail13\n");
 
-fail9:
-    XenIfaceDebugPrint(ERROR, "Fail9\n");
+fail12:
+    XenIfaceDebugPrint(ERROR, "Fail12\n");
 
-fail8:
-    XenIfaceDebugPrint(ERROR, "Fail8: Page = %lu\n", Page);
+fail11:
+    XenIfaceDebugPrint(ERROR, "Fail11: Page = %lu\n", Page);
 
     while (Page > 0) {
         ASSERT(NT_SUCCESS(XENBUS_GNTTAB(RevokeForeignAccess,
@@ -289,98 +319,37 @@ fail8:
     }
     IoFreeMdl(Context->Mdl);
 
+fail10:
+    XenIfaceDebugPrint(ERROR, "Fail10\n");
+    ExFreePoolWithTag(Context->KernelVa, XENIFACE_POOL_TAG);
+
+fail9:
+    XenIfaceDebugPrint(ERROR, "Fail9\n");
+    ExFreePoolWithTag(Context->Grants, XENIFACE_POOL_TAG);
+
+fail8:
+    XenIfaceDebugPrint(ERROR, "Fail8\n");
+
 fail7:
     XenIfaceDebugPrint(ERROR, "Fail7\n");
-    ExFreePoolWithTag(Context->KernelVa, XENIFACE_POOL_TAG);
+    RtlZeroMemory(Context, sizeof(XENIFACE_GRANT_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
-    ExFreePoolWithTag(Context->Grants, XENIFACE_POOL_TAG);
 
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
 
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
-    RtlZeroMemory(Context, sizeof(XENIFACE_GRANT_CONTEXT));
-    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+    __FreeCapturedBuffer(In);
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
-
-fail1:
-    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
-    return status;
-}
-
-DECLSPEC_NOINLINE
-NTSTATUS
-IoctlGnttabGetGrantResult(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PVOID             Buffer,
-    __in  ULONG             InLen,
-    __in  ULONG             OutLen,
-    __out PULONG_PTR        Info
-    )
-{
-    NTSTATUS status;
-    PXENIFACE_GNTTAB_GET_GRANT_RESULT_IN In = Buffer;
-    PXENIFACE_GNTTAB_GET_GRANT_RESULT_OUT Out = Buffer;
-    XENIFACE_CONTEXT_ID Id;
-    KIRQL Irql;
-    PIRP Irp;
-    PXENIFACE_CONTEXT_ID ContextId;
-    PXENIFACE_GRANT_CONTEXT Context;
-    ULONG Page;
-
-    status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_GET_GRANT_RESULT_IN))
-        goto fail1;
-
-    Id.Process = PsGetCurrentProcess();
-    Id.RequestId = In->RequestId;
-    Id.Type = XENIFACE_CONTEXT_GRANT;
-
-    XenIfaceDebugPrint(TRACE, "> Process %p, Id %lu\n", Id.Process, Id.RequestId);
-
-    CsqAcquireLock(&Fdo->IrpQueue, &Irql);
-    Irp = CsqPeekNextIrp(&Fdo->IrpQueue, NULL, &Id);
-
-    status = STATUS_NOT_FOUND;
-    if (Irp == NULL)
-        goto fail2;
-
-    ContextId = Irp->Tail.Overlay.DriverContext[0];
-    Context = CONTAINING_RECORD(ContextId, XENIFACE_GRANT_CONTEXT, Id);
-
-    status = STATUS_INVALID_BUFFER_SIZE;
-    if (OutLen != (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT, References[Context->NumberPages]))
-        goto fail3;
-
-    Out->Address = Context->UserVa;
-    XenIfaceDebugPrint(TRACE, "< Address %p, Irp %p\n", Context->UserVa, Irp);
-
-    for (Page = 0; Page < Context->NumberPages; Page++) {
-        Out->References[Page] = XENBUS_GNTTAB(GetReference,
-                                              &Fdo->GnttabInterface,
-                                              Context->Grants[Page]);
-        XenIfaceDebugPrint(INFO, "Ref[%lu] = %lu\n", Page, Out->References[Page]);
-    }
-
-    CsqReleaseLock(&Fdo->IrpQueue, Irql);
-    *Info = OutLen;
-
-    return STATUS_SUCCESS;
-
-fail3:
-    XenIfaceDebugPrint(ERROR, "Fail3\n");
-
-fail2:
-    XenIfaceDebugPrint(ERROR, "Fail2\n");
-    CsqReleaseLock(&Fdo->IrpQueue, Irql);
 
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
@@ -499,34 +468,46 @@ IoctlGnttabMapForeignPages(
 {
     NTSTATUS status;
     PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN In = Buffer;
+    PXENIFACE_GNTTAB_MAP_FOREIGN_PAGES_OUT Out = Irp->UserBuffer;
+    ULONG NumberPages;
     ULONG PageIndex;
     PXENIFACE_MAP_CONTEXT Context;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen < sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN) ||
-        OutLen != 0) {
+        OutLen != sizeof(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_OUT)) {
         goto fail1;
     }
 
+    // This IOCTL uses METHOD_NEITHER so we directly access user memory.
+
+    // Calculate the expected number of pages based on input buffer size.
+    NumberPages = (InLen - (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, References)) / sizeof(In->References[0]);
+
+    status = __CaptureUserBuffer(Buffer, InLen, &In);
+    if (!NT_SUCCESS(status))
+        goto fail2;
+
     status = STATUS_INVALID_PARAMETER;
     if (In->NumberPages == 0 ||
-        In->NumberPages > 1024 * 1024) {
-        goto fail2;
+        In->NumberPages > 1024 * 1024 ||
+        In->NumberPages != NumberPages) {
+        goto fail3;
     }
 
     if ((In->Flags & XENIFACE_GNTTAB_USE_NOTIFY_OFFSET) &&
         (In->NotifyOffset >= In->NumberPages * PAGE_SIZE)) {
-        goto fail2;
+        goto fail4;
     }
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen != (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, References[In->NumberPages]))
-        goto fail3;
+        goto fail5;
 
     status = STATUS_NO_MEMORY;
     Context = ExAllocatePoolWithTag(NonPagedPool, sizeof(XENIFACE_MAP_CONTEXT), XENIFACE_POOL_TAG);
     if (Context == NULL)
-        goto fail4;
+        goto fail6;
 
     RtlZeroMemory(Context, sizeof(XENIFACE_MAP_CONTEXT));
     Context->Id.Type = XENIFACE_CONTEXT_MAP;
@@ -547,7 +528,7 @@ IoctlGnttabMapForeignPages(
 
     status = STATUS_INVALID_PARAMETER;
     if (FindGnttabIrp(Fdo, &Context->Id) != NULL)
-        goto fail5;
+        goto fail7;
 
     status = XENBUS_GNTTAB(MapForeignPages,
                            &Fdo->GnttabInterface,
@@ -558,17 +539,17 @@ IoctlGnttabMapForeignPages(
                            &Context->Address);
 
     if (!NT_SUCCESS(status))
-        goto fail6;
+        goto fail8;
 
     status = STATUS_NO_MEMORY;
     Context->KernelVa = MmMapIoSpace(Context->Address, Context->NumberPages * PAGE_SIZE, MmCached);
     if (Context->KernelVa == NULL)
-        goto fail7;
+        goto fail9;
 
     status = STATUS_NO_MEMORY;
     Context->Mdl = IoAllocateMdl(Context->KernelVa, Context->NumberPages * PAGE_SIZE, FALSE, FALSE, NULL);
     if (Context->Mdl == NULL)
-        goto fail8;
+        goto fail10;
 
     MmBuildMdlForNonPagedPool(Context->Mdl);
 
@@ -584,121 +565,86 @@ IoctlGnttabMapForeignPages(
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
         status = GetExceptionCode();
-        goto fail9;
+        goto fail11;
     }
 
     status = STATUS_UNSUCCESSFUL;
     if (Context->UserVa == NULL)
-        goto fail10;
+        goto fail12;
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, Address %p, KernelVa %p, UserVa %p\n",
                        Context, Irp, Context->Address, Context->KernelVa, Context->UserVa);
+
+    // Pass the result to user mode.
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
+    try {
+        ProbeForWrite(Out, OutLen, 1);
+        Out->Address = Context->UserVa;
+    } except(EXCEPTION_EXECUTE_HANDLER) {
+        status = GetExceptionCode();
+        XenIfaceDebugPrint(ERROR, "Exception 0x%lx while probing/writing output buffer at %p, size 0x%lx\n", status, Out, OutLen);
+        goto fail13;
+    }
 
     // Insert the IRP/context into the pending queue.
     // This also checks (again) if the request ID is unique for the calling process.
     Irp->Tail.Overlay.DriverContext[0] = &Context->Id;
     status = IoCsqInsertIrpEx(&Fdo->IrpQueue, Irp, NULL, &Context->Id);
     if (!NT_SUCCESS(status))
-        goto fail11;
+        goto fail14;
+
+    __FreeCapturedBuffer(In);
 
     return STATUS_PENDING;
 
+fail14:
+    XenIfaceDebugPrint(ERROR, "Fail14\n");
+
+fail13:
+    XenIfaceDebugPrint(ERROR, "Fail13\n");
+    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
+
+fail12:
+    XenIfaceDebugPrint(ERROR, "Fail12\n");
+
 fail11:
     XenIfaceDebugPrint(ERROR, "Fail11\n");
-    MmUnmapLockedPages(Context->UserVa, Context->Mdl);
+    IoFreeMdl(Context->Mdl);
 
 fail10:
     XenIfaceDebugPrint(ERROR, "Fail10\n");
+    MmUnmapIoSpace(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
 
 fail9:
     XenIfaceDebugPrint(ERROR, "Fail9\n");
-    IoFreeMdl(Context->Mdl);
-
-fail8:
-    XenIfaceDebugPrint(ERROR, "Fail8\n");
-    MmUnmapIoSpace(Context->KernelVa, Context->NumberPages * PAGE_SIZE);
-
-fail7:
-    XenIfaceDebugPrint(ERROR, "Fail7\n");
     ASSERT(NT_SUCCESS(XENBUS_GNTTAB(UnmapForeignPages,
                                     &Fdo->GnttabInterface,
                                     Context->Address
                                     )));
+
+fail8:
+    XenIfaceDebugPrint(ERROR, "Fail8\n");
+
+fail7:
+    XenIfaceDebugPrint(ERROR, "Fail7\n");
+    RtlZeroMemory(Context, sizeof(XENIFACE_MAP_CONTEXT));
+    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
 
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
-    RtlZeroMemory(Context, sizeof(XENIFACE_MAP_CONTEXT));
-    ExFreePoolWithTag(Context, XENIFACE_POOL_TAG);
 
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");
 
 fail3:
     XenIfaceDebugPrint(ERROR, "Fail3\n");
+    __FreeCapturedBuffer(In);
 
 fail2:
     XenIfaceDebugPrint(ERROR, "Fail2\n");
-
-fail1:
-    XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);
-    return status;
-}
-
-DECLSPEC_NOINLINE
-NTSTATUS
-IoctlGnttabGetMapResult(
-    __in  PXENIFACE_FDO     Fdo,
-    __in  PVOID             Buffer,
-    __in  ULONG             InLen,
-    __in  ULONG             OutLen,
-    __out PULONG_PTR        Info
-    )
-{
-    NTSTATUS status;
-    PXENIFACE_GNTTAB_GET_MAP_RESULT_IN In = Buffer;
-    PXENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out = Buffer;
-    XENIFACE_CONTEXT_ID Id;
-    KIRQL Irql;
-    PIRP Irp;
-    PXENIFACE_MAP_CONTEXT Context;
-    PXENIFACE_CONTEXT_ID ContextId;
-
-    status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_IN) ||
-        OutLen != sizeof(XENIFACE_GNTTAB_GET_MAP_RESULT_OUT)) {
-        goto fail1;
-    }
-
-    Id.Type = XENIFACE_CONTEXT_MAP;
-    Id.Process = PsGetCurrentProcess();
-    Id.RequestId = In->RequestId;
-
-    XenIfaceDebugPrint(TRACE, "> Process %p, Id %lu\n", Id.Process, Id.RequestId);
-
-    CsqAcquireLock(&Fdo->IrpQueue, &Irql);
-    Irp = CsqPeekNextIrp(&Fdo->IrpQueue, NULL, &Id);
-
-    status = STATUS_NOT_FOUND;
-    if (Irp == NULL)
-        goto fail2;
-
-    ContextId = Irp->Tail.Overlay.DriverContext[0];
-    Context = CONTAINING_RECORD(ContextId, XENIFACE_MAP_CONTEXT, Id);
-
-    Out->Address = Context->UserVa;
-    XenIfaceDebugPrint(TRACE, "< Address %p, Irp %p\n", Context->UserVa, Irp);
-
-    CsqReleaseLock(&Fdo->IrpQueue, Irql);
-    *Info = OutLen;
-
-    return STATUS_SUCCESS;
-
-fail2:
-    XenIfaceDebugPrint(ERROR, "Fail2\n");
-    CsqReleaseLock(&Fdo->IrpQueue, Irql);
 
 fail1:
     XenIfaceDebugPrint(ERROR, "Fail1 (%08x)\n", status);

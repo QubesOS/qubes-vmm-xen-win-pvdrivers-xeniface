@@ -37,56 +37,6 @@
 #define XENSTORE_ABS_PATH_MAX 3072
 #define XENSTORE_REL_PATH_MAX 2048
 
-static
-NTSTATUS
-__CaptureUserBuffer(
-    __in  PVOID Buffer,
-    __in  ULONG Length,
-    __out PVOID *CapturedBuffer
-    )
-{
-    NTSTATUS Status;
-    PVOID TempBuffer = NULL;
-
-    if (Length == 0) {
-        *CapturedBuffer = NULL;
-        return STATUS_SUCCESS;
-    }
-
-    Status = STATUS_NO_MEMORY;
-    TempBuffer = ExAllocatePoolWithTag(NonPagedPool, Length, XENIFACE_POOL_TAG);
-    if (TempBuffer == NULL)
-        return STATUS_INSUFFICIENT_RESOURCES;
-
-    Status = STATUS_SUCCESS;
-
-#pragma prefast(suppress: 6320) // we want to catch all exceptions
-    try {
-        ProbeForRead(Buffer, Length, 1);
-        RtlCopyMemory(TempBuffer, Buffer, Length);
-    } except(EXCEPTION_EXECUTE_HANDLER) {
-        XenIfaceDebugPrint(ERROR, "Exception while probing/reading buffer at %p, size 0x%lx\n", Buffer, Length);
-        ExFreePoolWithTag(TempBuffer, XENIFACE_POOL_TAG);
-        TempBuffer = NULL;
-        Status = GetExceptionCode();
-    }
-
-    *CapturedBuffer = TempBuffer;
-
-    return Status;
- }
-
-static
-VOID
-__FreeCapturedBuffer(
-    __in  PVOID CapturedBuffer
-    )
-{
-    if (CapturedBuffer != NULL) {
-        ExFreePoolWithTag(CapturedBuffer, XENIFACE_POOL_TAG);
-    }
-}
-
 static FORCEINLINE
 BOOLEAN
 __IsValidStr(

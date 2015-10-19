@@ -31,8 +31,56 @@
 
 #include "driver.h"
 #include "ioctls.h"
-#include "..\..\include\xeniface_ioctls.h"
+#include "xeniface_ioctls.h"
 #include "log.h"
+
+NTSTATUS
+__CaptureUserBuffer(
+    __in  PVOID Buffer,
+    __in  ULONG Length,
+    __out PVOID *CapturedBuffer
+    )
+{
+    NTSTATUS Status;
+    PVOID TempBuffer = NULL;
+
+    if (Length == 0) {
+        *CapturedBuffer = NULL;
+        return STATUS_SUCCESS;
+    }
+
+    Status = STATUS_NO_MEMORY;
+    TempBuffer = ExAllocatePoolWithTag(NonPagedPool, Length, XENIFACE_POOL_TAG);
+    if (TempBuffer == NULL)
+        return STATUS_INSUFFICIENT_RESOURCES;
+
+    Status = STATUS_SUCCESS;
+
+#pragma prefast(suppress: 6320) // we want to catch all exceptions
+    try {
+        ProbeForRead(Buffer, Length, 1);
+        RtlCopyMemory(TempBuffer, Buffer, Length);
+    } except(EXCEPTION_EXECUTE_HANDLER) {
+        XenIfaceDebugPrint(ERROR, "Exception while probing/reading buffer at %p, size 0x%lx\n", Buffer, Length);
+        ExFreePoolWithTag(TempBuffer, XENIFACE_POOL_TAG);
+        TempBuffer = NULL;
+        Status = GetExceptionCode();
+    }
+
+    *CapturedBuffer = TempBuffer;
+
+    return Status;
+}
+
+VOID
+__FreeCapturedBuffer(
+    __in  PVOID CapturedBuffer
+    )
+{
+    if (CapturedBuffer != NULL) {
+        ExFreePoolWithTag(CapturedBuffer, XENIFACE_POOL_TAG);
+    }
+}
 
 // Cleanup store watches and event channels, called on file object close.
 _IRQL_requires_(PASSIVE_LEVEL) // EvtchnFree calls KeFlushQueuedDpcs
@@ -162,24 +210,16 @@ XenIfaceIoctl(
         break;
 
         // gnttab
-    case IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS:
-        status = IoctlGnttabPermitForeignAccess(Fdo, Buffer, InLen, OutLen, Irp);
-        break;
-
-    case IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT:
-        status = IoctlGnttabGetGrantResult(Fdo, Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+    case IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS: // this is a METHOD_NEITHER IOCTL
+        status = IoctlGnttabPermitForeignAccess(Fdo, Stack->Parameters.DeviceIoControl.Type3InputBuffer, InLen, OutLen, Irp);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_REVOKE_FOREIGN_ACCESS:
         status = IoctlGnttabRevokeForeignAccess(Fdo, Buffer, InLen, OutLen);
         break;
 
-    case IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES:
-        status = IoctlGnttabMapForeignPages(Fdo, Buffer, InLen, OutLen, Irp);
-        break;
-
-    case IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT:
-        status = IoctlGnttabGetMapResult(Fdo, Buffer, InLen, OutLen, &Irp->IoStatus.Information);
+    case IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES: // this is a METHOD_NEITHER IOCTL
+        status = IoctlGnttabMapForeignPages(Fdo, Stack->Parameters.DeviceIoControl.Type3InputBuffer, InLen, OutLen, Irp);
         break;
 
     case IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES:

@@ -396,9 +396,8 @@ XcGnttabPermitForeignAccess(
     OUT ULONG *References
     )
 {
-    XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In1;
-    XENIFACE_GNTTAB_GET_GRANT_RESULT_IN In2;
-    XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT *Out2;
+    XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_IN In;
+    XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_OUT *Out;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned, Size;
     BOOL Success;
@@ -407,31 +406,31 @@ XcGnttabPermitForeignAccess(
     // lock the whole operation to not generate duplicate IDs
     EnterCriticalSection(&Xc->RequestListLock);
 
-    In1.RequestId = Xc->RequestId;
-    In1.RemoteDomain = RemoteDomain;
-    In1.NumberPages = NumberPages;
-    In1.NotifyOffset = NotifyOffset;
-    In1.NotifyPort = NotifyPort;
-    In1.Flags = Flags;
+    In.RequestId = Xc->RequestId;
+    In.RemoteDomain = RemoteDomain;
+    In.NumberPages = NumberPages;
+    In.NotifyOffset = NotifyOffset;
+    In.NotifyPort = NotifyPort;
+    In.Flags = Flags;
 
-    Size = (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_GET_GRANT_RESULT_OUT, References[NumberPages]);
-    Out2 = malloc(Size);
+    Size = (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS_OUT, References[NumberPages]);
+    Out = malloc(Size);
     Request = malloc(sizeof(*Request));
 
     Status = ERROR_OUTOFMEMORY;
-    if (!Request || !Out2)
+    if (!Request || !Out)
         goto fail;
 
     ZeroMemory(Request, sizeof(*Request));
-    Request->Id = In1.RequestId;
+    Request->Id = In.RequestId;
 
     Log(XLL_DEBUG, L"Id %lu, RemoteDomain: %d, NumberPages: %lu, NotifyOffset: 0x%x, NotifyPort: %lu, Flags: 0x%x",
-        In1.RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
+        In.RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
     Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_PERMIT_FOREIGN_ACCESS,
-                              &In1, sizeof(In1),
-                              NULL, 0,
+                              &In, sizeof(In),
+                              Out, Size,
                               &Returned,
                               &Request->Overlapped);
 
@@ -448,36 +447,25 @@ XcGnttabPermitForeignAccess(
         goto fail;
     }
 
-    // get actual result
-    In2.RequestId = In1.RequestId;
-    Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_GET_GRANT_RESULT,
-                              &In2, sizeof(In2),
-                              Out2, Size,
-                              &Returned,
-                              NULL);
-
-    assert(Success);
-
-    Request->Address = Out2->Address;
+    Request->Address = Out->Address;
 
     InsertTailList(&Xc->RequestList, &Request->ListEntry);
     Xc->RequestId++;
     LeaveCriticalSection(&Xc->RequestListLock);
 
-    *Address = Out2->Address;
-    memcpy(References, &Out2->References, NumberPages * sizeof(ULONG));
+    *Address = Out->Address;
+    memcpy(References, &Out->References, NumberPages * sizeof(ULONG));
     Log(XLL_DEBUG, L"Address: %p", *Address);
     for (ULONG i = 0; i < NumberPages; i++)
-        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, Out2->References[i]);
+        Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, Out->References[i]);
 
-    free(Out2);
+    free(Out);
     return ERROR_SUCCESS;
 
 fail:
     LeaveCriticalSection(&Xc->RequestListLock);
     Log(XLL_ERROR, L"Error: 0x%x", Status);
-    free(Out2);
+    free(Out);
     free(Request);
     return Status;
 }
@@ -542,9 +530,8 @@ XcGnttabMapForeignPages(
     OUT PVOID *Address
     )
 {
-    XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN *In1;
-    XENIFACE_GNTTAB_GET_MAP_RESULT_IN In2;
-    XENIFACE_GNTTAB_GET_MAP_RESULT_OUT Out2;
+    XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN *In;
+    XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_OUT Out;
     PXENCONTROL_GNTTAB_REQUEST Request;
     DWORD Returned, Size;
     BOOL Success;
@@ -555,32 +542,32 @@ XcGnttabMapForeignPages(
 
     Status = ERROR_OUTOFMEMORY;
     Size = (ULONG)FIELD_OFFSET(XENIFACE_GNTTAB_MAP_FOREIGN_PAGES_IN, References[NumberPages]);
-    In1 = malloc(Size);
+    In = malloc(Size);
     Request = malloc(sizeof(*Request));
-    if (!In1 || !Request)
+    if (!In || !Request)
         goto fail;
 
-    In1->RequestId = Xc->RequestId;
-    In1->RemoteDomain = RemoteDomain;
-    In1->NumberPages = NumberPages;
-    In1->NotifyOffset = NotifyOffset;
-    In1->NotifyPort = NotifyPort;
-    In1->Flags = Flags;
-    memcpy(&In1->References, References, NumberPages * sizeof(ULONG));
+    In->RequestId = Xc->RequestId;
+    In->RemoteDomain = RemoteDomain;
+    In->NumberPages = NumberPages;
+    In->NotifyOffset = NotifyOffset;
+    In->NotifyPort = NotifyPort;
+    In->Flags = Flags;
+    memcpy(&In->References, References, NumberPages * sizeof(ULONG));
 
     ZeroMemory(Request, sizeof(*Request));
-    Request->Id = In1->RequestId;
+    Request->Id = In->RequestId;
 
     Log(XLL_DEBUG, L"Id %lu, RemoteDomain: %d, NumberPages: %lu, NotifyOffset: 0x%x, NotifyPort: %lu, Flags: 0x%x",
-        In1->RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
+        In->RequestId, RemoteDomain, NumberPages, NotifyOffset, NotifyPort, Flags);
 
     for (ULONG i = 0; i < NumberPages; i++)
         Log(XLL_DEBUG, L"Grant ref[%lu]: %lu", i, References[i]);
 
     Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_GNTTAB_MAP_FOREIGN_PAGES,
-                              In1, Size,
-                              NULL, 0,
+                              In, Size,
+                              &Out, sizeof(Out),
                               &Returned,
                               &Request->Overlapped);
 
@@ -597,33 +584,22 @@ XcGnttabMapForeignPages(
         goto fail;
     }
 
-    // get actual result
-    In2.RequestId = In1->RequestId;
-    Success = DeviceIoControl(Xc->XenIface,
-                              IOCTL_XENIFACE_GNTTAB_GET_MAP_RESULT,
-                              &In2, sizeof(In2),
-                              &Out2, sizeof(Out2),
-                              &Returned,
-                              NULL);
-
-    assert(Success);
-
-    Request->Address = Out2.Address;
+    Request->Address = Out.Address;
     InsertTailList(&Xc->RequestList, &Request->ListEntry);
     Xc->RequestId++;
     LeaveCriticalSection(&Xc->RequestListLock);
 
-    *Address = Out2.Address;
+    *Address = Out.Address;
 
     Log(XLL_DEBUG, L"Address: %p", *Address);
 
-    free(In1);
+    free(In);
     return ERROR_SUCCESS;
 
 fail:
     LeaveCriticalSection(&Xc->RequestListLock);
     Log(XLL_ERROR, L"Error: 0x%x", Status);
-    free(In1);
+    free(In);
     free(Request);
     return Status;
 }
