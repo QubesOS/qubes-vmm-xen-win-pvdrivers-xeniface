@@ -797,7 +797,7 @@ XcStoreSetPermissions(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
-    IN  PXENBUS_STORE_PERMISSION Permissions
+    IN  PXENIFACE_STORE_PERMISSION Permissions
     )
 {
     DWORD Returned, Size;
@@ -818,7 +818,7 @@ XcStoreSetPermissions(
     In->Path = Path;
     In->PathLength = (DWORD)strlen(In->Path) + 1;
     In->NumberPermissions = Count;
-    memcpy(&In->Permissions, Permissions, Count * sizeof(XENBUS_STORE_PERMISSION));
+    memcpy(&In->Permissions, Permissions, Count * sizeof(XENIFACE_STORE_PERMISSION));
 
     Success = DeviceIoControl(Xc->XenIface,
                               IOCTL_XENIFACE_STORE_SET_PERMISSIONS,

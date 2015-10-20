@@ -295,6 +295,56 @@ fail1:
     return status;
 }
 
+static
+PXENBUS_STORE_PERMISSION
+__ConvertPermissions(
+    __in  ULONG                       NumberPermissions,
+    __in  PXENIFACE_STORE_PERMISSION  XenifacePermissions
+)
+{
+    PXENBUS_STORE_PERMISSION          XenbusPermissions;
+    ULONG                             Index;
+
+    if (NumberPermissions > 255)
+        goto fail1;
+
+    XenbusPermissions = ExAllocatePoolWithTag(NonPagedPool, NumberPermissions * sizeof(XENBUS_STORE_PERMISSION), XENIFACE_POOL_TAG);
+    if (XenbusPermissions == NULL)
+        goto fail2;
+
+    // Currently XENIFACE_STORE_PERMISSION is the same as XENBUS_STORE_PERMISSION,
+    // but we convert them here in case something changes in the future.
+    for (Index = 0; Index < NumberPermissions; Index++) {
+        if ((XenifacePermissions[Index].Mask & ~XENIFACE_STORE_ALLOWED_PERMISSIONS) != 0)
+            goto fail3;
+
+        XenbusPermissions[Index].Domain = XenifacePermissions[Index].Domain;
+        XenbusPermissions[Index].Mask = (XENBUS_STORE_PERMISSION_MASK)XenifacePermissions[Index].Mask;
+    }
+
+    return XenbusPermissions;
+
+fail3:
+    XenIfaceDebugPrint(ERROR, "Fail3\n");
+    ExFreePoolWithTag(XenbusPermissions, XENIFACE_POOL_TAG);
+
+fail2:
+    XenIfaceDebugPrint(ERROR, "Fail2\n");
+
+fail1:
+    XenIfaceDebugPrint(ERROR, "Fail1\n");
+    return NULL;
+}
+
+static
+VOID
+__FreePermissions(
+    __in  PXENBUS_STORE_PERMISSION    Permissions
+    )
+{
+    ExFreePoolWithTag(Permissions, XENIFACE_POOL_TAG);
+}
+
 DECLSPEC_NOINLINE
 NTSTATUS
 IoctlStoreSetPermissions(
@@ -306,6 +356,7 @@ IoctlStoreSetPermissions(
 {
     NTSTATUS status;
     PXENIFACE_STORE_SET_PERMISSIONS_IN In = Buffer;
+    PXENBUS_STORE_PERMISSION Permissions;
     ULONG Index;
     PCHAR Path;
 
@@ -324,19 +375,20 @@ IoctlStoreSetPermissions(
         goto fail3;
     }
 
+    Permissions = __ConvertPermissions(In->NumberPermissions, In->Permissions);
+    if (Permissions == NULL)
+        goto fail4;
+
     status = __CaptureUserBuffer(In->Path, In->PathLength, &Path);
     if (!NT_SUCCESS(status))
-        goto fail4;
+        goto fail5;
 
     Path[In->PathLength - 1] = 0;
     XenIfaceDebugPrint(TRACE, "> Path '%s', NumberPermissions %lu\n", Path, In->NumberPermissions);
 
     for (Index = 0; Index < In->NumberPermissions; Index++) {
         XenIfaceDebugPrint(TRACE, "> %lu: Domain %d, Mask 0x%x\n",
-                           Index, In->Permissions[Index].Domain, In->Permissions[Index].Mask);
-
-        if ((In->Permissions[Index].Mask & ~XENIFACE_STORE_ALLOWED_PERMISSIONS) != 0)
-            goto fail5;
+                           Index, Permissions[Index].Domain, Permissions[Index].Mask);
     }
 
     status = XENBUS_STORE(PermissionsSet,
@@ -344,7 +396,7 @@ IoctlStoreSetPermissions(
                           NULL, // transaction
                           NULL, // prefix
                           Path,
-                          In->Permissions,
+                          Permissions,
                           In->NumberPermissions);
 
     if (!NT_SUCCESS(status))
@@ -355,10 +407,11 @@ IoctlStoreSetPermissions(
 
 fail6:
     XenIfaceDebugPrint(ERROR, "Fail6\n");
+    __FreeCapturedBuffer(Path);
 
 fail5:
     XenIfaceDebugPrint(ERROR, "Fail5\n");
-    __FreeCapturedBuffer(Path);
+    __FreePermissions(Permissions);
 
 fail4:
     XenIfaceDebugPrint(ERROR, "Fail4\n");

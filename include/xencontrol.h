@@ -304,7 +304,7 @@ XcStoreSetPermissions(
     IN  PXENCONTROL_CONTEXT Xc,
     IN  PCHAR Path,
     IN  ULONG Count,
-    IN  PXENBUS_STORE_PERMISSION Permissions
+    IN  PXENIFACE_STORE_PERMISSION Permissions
     );
 
 /*! \brief Add a XenStore key watch

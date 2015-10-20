@@ -95,7 +95,7 @@ DWORD StoreTest(IN PXENCONTROL_CONTEXT xc, IN ULONG serverPid, IN USHORT remoteD
 {
     CHAR path[256], value[256];
     DWORD status;
-    XENBUS_STORE_PERMISSION perms[2];
+    XENIFACE_STORE_PERMISSION perms[2];
     DWORD pid = GetCurrentProcessId();
 
     StringCbPrintfA(path, sizeof(path), "name");
@@ -116,9 +116,9 @@ DWORD StoreTest(IN PXENCONTROL_CONTEXT xc, IN ULONG serverPid, IN USHORT remoteD
     *localDomain = (USHORT)atoi(value);
 
     perms[0].Domain = *localDomain; // our domain
-    perms[0].Mask = XENBUS_STORE_PERM_NONE; // no permissions to others
+    perms[0].Mask = XENIFACE_STORE_PERM_NONE; // no permissions to others
     perms[1].Domain = remoteDomain; // peer
-    perms[1].Mask = XENBUS_STORE_PERM_READ;
+    perms[1].Mask = XENIFACE_STORE_PERM_READ;
 
     StringCbPrintfA(path, sizeof(path), "xiftest-%d", pid);
     StringCbPrintfA(value, sizeof(value), "this is a test");

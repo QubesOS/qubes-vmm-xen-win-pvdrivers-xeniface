@@ -38,23 +38,20 @@ DEFINE_GUID(GUID_INTERFACE_XENIFACE, \
 /************************************************************************/
 /* store ioctls                                                         */
 /************************************************************************/
-// Define only for user mode clients.
-#ifndef XENIFACE_KERNEL_MODE
 
-typedef enum _XENBUS_STORE_PERMISSION_MASK {
-    XENBUS_STORE_PERM_NONE = 0,
-    XENBUS_STORE_PERM_READ = 1,
-    XENBUS_STORE_PERM_WRITE = 2,
-} XENBUS_STORE_PERMISSION_MASK;
+typedef enum _XENIFACE_STORE_PERMISSION_MASK {
+    XENIFACE_STORE_PERM_NONE  = 0,
+    XENIFACE_STORE_PERM_READ  = 1,
+    XENIFACE_STORE_PERM_WRITE = 2,
+} XENIFACE_STORE_PERMISSION_MASK;
 
-typedef struct _XENBUS_STORE_PERMISSION {
+typedef struct _XENIFACE_STORE_PERMISSION {
     USHORT Domain;
-    XENBUS_STORE_PERMISSION_MASK Mask;
-} XENBUS_STORE_PERMISSION, *PXENBUS_STORE_PERMISSION;
+    XENIFACE_STORE_PERMISSION_MASK Mask;
+} XENIFACE_STORE_PERMISSION, *PXENIFACE_STORE_PERMISSION;
 
-#endif
-
-#define XENIFACE_STORE_ALLOWED_PERMISSIONS  (XENBUS_STORE_PERM_NONE | XENBUS_STORE_PERM_READ | XENBUS_STORE_PERM_WRITE)
+#define XENIFACE_STORE_ALLOWED_PERMISSIONS \
+    (XENIFACE_STORE_PERM_NONE | XENIFACE_STORE_PERM_READ | XENIFACE_STORE_PERM_WRITE)
 
 // TODO: document input/output format of these IOCTLs?
 #define IOCTL_XENIFACE_STORE_READ \
@@ -76,7 +73,7 @@ typedef struct _XENIFACE_STORE_SET_PERMISSIONS_IN {
     PCHAR Path;
     ULONG PathLength; // number of bytes, including the null terminator
     ULONG NumberPermissions;
-    XENBUS_STORE_PERMISSION Permissions[ANYSIZE_ARRAY];
+    XENIFACE_STORE_PERMISSION Permissions[ANYSIZE_ARRAY];
 } XENIFACE_STORE_SET_PERMISSIONS_IN, *PXENIFACE_STORE_SET_PERMISSIONS_IN;
 
 #define IOCTL_XENIFACE_STORE_ADD_WATCH \

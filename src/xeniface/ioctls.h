@@ -32,7 +32,6 @@
 #ifndef _IOCTLS_H_
 #define _IOCTLS_H_
 
-#define XENIFACE_KERNEL_MODE
 #include "xeniface_ioctls.h"
 
 typedef enum _XENIFACE_CONTEXT_TYPE {
