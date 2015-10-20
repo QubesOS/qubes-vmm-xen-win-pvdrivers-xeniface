@@ -87,10 +87,10 @@ XcClose(
     IN  PXENCONTROL_CONTEXT Xc
     );
 
-/*! \brief Open a "listening" event channel
+/*! \brief Open an unbound event channel
     \param Xc Xencontrol handle returned by XcOpen()
     \param RemoteDomain ID of a remote domain that will bind the channel
-    \param Event Handle to an event that will receive event channel notifications
+    \param Event Handle to an event object that will receive event channel notifications
     \param Mask Set to TRUE if the event channel should be initially masked
     \param LocalPort Port number that is assigned to the event channel
     \return Error code
@@ -110,7 +110,7 @@ XcEvtchnBindUnbound(
     \param RemoteDomain ID of a remote domain that has already bound the channel
     \param RemotePort Port number that is assigned to the event channel in the \a RemoteDomain
     \param Event Handle to an event that will receive event channel notifications
-    \param Mask Set to TRUE if the event channel should be initially masked
+    \param Mask Set to TRUE if the event object channel should be initially masked
     \param LocalPort Port number that is assigned to the event channel
     \return Error code
 */
@@ -137,7 +137,7 @@ XcEvtchnClose(
     IN  ULONG LocalPort
     );
 
-/*! \brief Notify the remote end of the channel
+/*! \brief Notify the remote end of an event channel
     \param Xc Xencontrol handle returned by XcOpen()
     \param LocalPort Port number that is assigned to the event channel
     \return Error code
@@ -185,7 +185,7 @@ XcGnttabPermitForeignAccess(
     OUT ULONG *References
     );
 
-/*! \brief Revoke a foreign domain access to local memory
+/*! \brief Revoke a foreign domain access to previously granted memory region
     \param Xc Xencontrol handle returned by XcOpen()
     \param Address Local user mode address of the granted memory region
     \return Error code
@@ -202,7 +202,7 @@ XcGnttabRevokeForeignAccess(
     \param RemoteDomain ID of a remote domain that has granted access to the pages
     \param NumberPages Number of 4k pages to map
     \param References An array of Xen grant numbers for every granted page
-    \param NotifyOffset Offset of a byte in the granted region that will be set to 0 when the region is unmapped
+    \param NotifyOffset Offset of a byte in the mapped region that will be set to 0 when the region is unmapped
     \param NotifyPort Local port number of an open event channel that will be notified when the region is unmapped
     \param Flags Map options
     \param Address Local user mode address of the mapped memory region
