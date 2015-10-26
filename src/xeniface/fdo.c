@@ -143,7 +143,7 @@ failXS:
 #define REGISTRY_EVENTS 2
 
 static NTSTATUS FdoRegistryThreadHandler(IN  PXENIFACE_THREAD  Self,
-                                  IN PVOID StartContext) {
+                                         IN  PVOID StartContext) {
     KEVENT* threadevents[REGISTRY_EVENTS];
     PXENIFACE_FDO Fdo = (PXENIFACE_FDO)StartContext;
     NTSTATUS status;
@@ -2297,7 +2297,7 @@ FdoCreate(
 
 #pragma prefast(suppress:6014) // Possibly leaking Fdo->InterfaceName
     status = IoRegisterDeviceInterface(PhysicalDeviceObject,
-                                       (LPGUID) &GUID_INTERFACE_XENIFACE,
+                                       (LPGUID)&GUID_INTERFACE_XENIFACE,
                                        NULL,
                                        &Fdo->InterfaceName);
     if (!NT_SUCCESS(status))
@@ -2329,7 +2329,7 @@ FdoCreate(
                                  XENBUS,
                                  STORE,
                                  (PINTERFACE)&Fdo->StoreInterface,
-                                 sizeof(Fdo->StoreInterface),
+                                 sizeof (Fdo->StoreInterface),
                                  FALSE);
     if (!NT_SUCCESS(status))
         goto fail10;
@@ -2338,7 +2338,7 @@ FdoCreate(
                                  XENBUS,
                                  EVTCHN,
                                  (PINTERFACE)&Fdo->EvtchnInterface,
-                                 sizeof(Fdo->EvtchnInterface),
+                                 sizeof (Fdo->EvtchnInterface),
                                  FALSE);
     if (!NT_SUCCESS(status))
         goto fail11;
@@ -2347,7 +2347,7 @@ FdoCreate(
                                  XENBUS,
                                  GNTTAB,
                                  (PINTERFACE)&Fdo->GnttabInterface,
-                                 sizeof(Fdo->GnttabInterface),
+                                 sizeof (Fdo->GnttabInterface),
                                  FALSE);
     if (!NT_SUCCESS(status))
         goto fail12;
@@ -2388,7 +2388,7 @@ FdoCreate(
     ProcessorCount = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
 
     status = STATUS_NO_MEMORY;
-    Fdo->EvtchnDpc = __FdoAllocate(sizeof(KDPC) * ProcessorCount);
+    Fdo->EvtchnDpc = __FdoAllocate(sizeof (KDPC) * ProcessorCount);
     if (Fdo->EvtchnDpc == NULL)
         goto fail15;
 
@@ -2432,19 +2432,19 @@ fail12:
     Error("fail12\n");
 
     RtlZeroMemory(&Fdo->EvtchnInterface,
-                  sizeof(XENBUS_EVTCHN_INTERFACE));
+                  sizeof (XENBUS_EVTCHN_INTERFACE));
 
 fail11:
     Error("fail11\n");
 
     RtlZeroMemory(&Fdo->StoreInterface,
-                  sizeof(XENBUS_STORE_INTERFACE));
+                  sizeof (XENBUS_STORE_INTERFACE));
 
 fail10:
     Error("fail10\n");
 
     RtlZeroMemory(&Fdo->SharedInfoInterface,
-                  sizeof(XENBUS_SHARED_INFO_INTERFACE));
+                  sizeof (XENBUS_SHARED_INFO_INTERFACE));
 
 fail9:
     Error("fail8\n");
@@ -2510,8 +2510,8 @@ FdoDestroy(
     )
 {
     PXENIFACE_DX          Dx = Fdo->Dx;
-    PDEVICE_OBJECT      FunctionDeviceObject = Dx->DeviceObject;
-    ULONG               ProcessorCount;
+    PDEVICE_OBJECT        FunctionDeviceObject = Dx->DeviceObject;
+    ULONG                 ProcessorCount;
 
     ASSERT(IsListEmpty(&Dx->ListEntry));
     ASSERT3U(Fdo->References, ==, 0);
@@ -2526,32 +2526,32 @@ FdoDestroy(
     Dx->Fdo = NULL;
 
     ProcessorCount = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
-    RtlZeroMemory(Fdo->EvtchnDpc, sizeof(KDPC) * ProcessorCount);
+    RtlZeroMemory(Fdo->EvtchnDpc, sizeof (KDPC) * ProcessorCount);
     __FdoFree(Fdo->EvtchnDpc);
 
-    RtlZeroMemory(&Fdo->GnttabCacheLock, sizeof(KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->GnttabCacheLock, sizeof (KSPIN_LOCK));
     ASSERT(IsListEmpty(&Fdo->IrpList));
-    RtlZeroMemory(&Fdo->IrpList, sizeof(LIST_ENTRY));
-    RtlZeroMemory(&Fdo->IrpQueueLock, sizeof(KSPIN_LOCK));
-    RtlZeroMemory(&Fdo->IrpQueue, sizeof(IO_CSQ));
+    RtlZeroMemory(&Fdo->IrpList, sizeof (LIST_ENTRY));
+    RtlZeroMemory(&Fdo->IrpQueueLock, sizeof (KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->IrpQueue, sizeof (IO_CSQ));
 
     ASSERT(IsListEmpty(&Fdo->EvtchnList));
-    RtlZeroMemory(&Fdo->EvtchnList, sizeof(LIST_ENTRY));
-    RtlZeroMemory(&Fdo->EvtchnLock, sizeof(KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->EvtchnList, sizeof (LIST_ENTRY));
+    RtlZeroMemory(&Fdo->EvtchnLock, sizeof (KSPIN_LOCK));
 
     ASSERT(IsListEmpty(&Fdo->StoreWatchList));
-    RtlZeroMemory(&Fdo->StoreWatchList, sizeof(LIST_ENTRY));
-    RtlZeroMemory(&Fdo->StoreWatchLock, sizeof(KSPIN_LOCK));
+    RtlZeroMemory(&Fdo->StoreWatchList, sizeof (LIST_ENTRY));
+    RtlZeroMemory(&Fdo->StoreWatchLock, sizeof (KSPIN_LOCK));
 
-    RtlZeroMemory(&Fdo->Mutex, sizeof(XENIFACE_MUTEX));
+    RtlZeroMemory(&Fdo->Mutex, sizeof (XENIFACE_MUTEX));
 
     Fdo->InterfacesAcquired = FALSE;
 
     RtlZeroMemory(&Fdo->GnttabInterface,
-                  sizeof(XENBUS_GNTTAB_INTERFACE));
+                  sizeof (XENBUS_GNTTAB_INTERFACE));
 
     RtlZeroMemory(&Fdo->EvtchnInterface,
-                  sizeof(XENBUS_EVTCHN_INTERFACE));
+                  sizeof (XENBUS_EVTCHN_INTERFACE));
 
     RtlZeroMemory(&Fdo->StoreInterface,
                   sizeof (XENBUS_STORE_INTERFACE));
