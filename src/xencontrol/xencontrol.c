@@ -30,7 +30,7 @@ _Log(
     va_list Args;
     DWORD LastError;
 
-    if (!Logger)
+    if (Logger == NULL)
         return;
 
     if (LogLevel > CurrentLogLevel)
