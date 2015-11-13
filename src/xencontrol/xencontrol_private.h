@@ -32,7 +32,7 @@
 
 typedef struct _XENCONTROL_CONTEXT {
     HANDLE XenIface;
-    XencontrolLogger *Logger;
+    XENCONTROL_LOGGER *Logger;
     XENCONTROL_LOG_LEVEL LogLevel;
     ULONG RequestId;
     LIST_ENTRY RequestList;

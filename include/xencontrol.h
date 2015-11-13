@@ -33,15 +33,15 @@ _XENCONTROL_LOG_LEVEL {
     XLL_TRACE,
 } XENCONTROL_LOG_LEVEL;
 
-/*! \typedef XencontrolLogger
+/*! \typedef XENCONTROL_LOGGER
     \brief Callback for receiving diagnostic messages from the library
 */
 typedef void
-XencontrolLogger(
-    IN XENCONTROL_LOG_LEVEL LogLevel,
-    IN const CHAR *Function,
-    IN const WCHAR *Format,
-    IN va_list Args
+XENCONTROL_LOGGER(
+    IN  XENCONTROL_LOG_LEVEL LogLevel,
+    IN  const CHAR *Function,
+    IN  const WCHAR *Message,
+    IN  va_list Args
     );
 
 /*! \brief Register a callback for receiving library's diagnostic messages
@@ -52,7 +52,7 @@ XENCONTROL_API
 void
 XcRegisterLogger(
     IN  PXENCONTROL_CONTEXT Xc,
-    IN  XencontrolLogger *Logger
+    IN  XENCONTROL_LOGGER *Logger
     );
 
 /*! \brief Set log level threshold for library's diagnostic messages
@@ -74,7 +74,7 @@ XcSetLogLevel(
 XENCONTROL_API
 DWORD
 XcOpen(
-    IN  XencontrolLogger *Logger,
+    IN  XENCONTROL_LOGGER *Logger,
     OUT PXENCONTROL_CONTEXT *Xc
     );
 

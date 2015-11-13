@@ -19,7 +19,7 @@ DllMain(
 
 static void
 _Log(
-    IN  XencontrolLogger *Logger,
+    IN  XENCONTROL_LOGGER *Logger,
     IN  XENCONTROL_LOG_LEVEL LogLevel,
     IN  XENCONTROL_LOG_LEVEL CurrentLogLevel,
     IN  PCHAR Function,
@@ -64,7 +64,7 @@ _LogMultiSz(
 void
 XcRegisterLogger(
     IN  PXENCONTROL_CONTEXT Xc,
-    IN  XencontrolLogger *Logger
+    IN  XENCONTROL_LOGGER *Logger
     )
 {
     Xc->Logger = Logger;
@@ -81,7 +81,7 @@ XcSetLogLevel(
 
 DWORD
 XcOpen(
-    IN  XencontrolLogger *Logger,
+    IN  XENCONTROL_LOGGER *Logger,
     OUT PXENCONTROL_CONTEXT *Xc
     )
 {
@@ -123,7 +123,6 @@ XcOpen(
     }
 
     // Using 'BufferSize' from failed function call
-    // ...yeah, that's the point
 #pragma warning(suppress: 6102)
     DetailData = (SP_DEVICE_INTERFACE_DETAIL_DATA *)malloc(BufferSize);
     if (!DetailData) {
@@ -163,6 +162,7 @@ XcOpen(
 fail:
     _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
          L"Error: 0x%x", GetLastError());
+
     free(DetailData);
     return GetLastError();
 }
