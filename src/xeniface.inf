@@ -90,7 +90,7 @@ HKR,,CoInstallers32,0x00010000,"xeniface_coinst_@MAJOR_VERSION@_@MINOR_VERSION@_
 [xenlite_Service_Inst]
 DisplayName    = %xenlite.SVCDESC%
 ServiceType    = 16              ; SERVICE_WIN32_OWN_PROCESS
-StartType      = 2               ; SERVICE_AUTO_START
+StartType      = 4               ; SERVICE_DISABLED
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %11%\liteagent.exe
 
