@@ -60,6 +60,7 @@ typedef struct _XENIFACE_EVTCHN_CONTEXT {
     PKEVENT                Event;
     PXENIFACE_FDO          Fdo;
     PVOID                  FileObject;
+    KDPC                   Dpc;
 } XENIFACE_EVTCHN_CONTEXT, *PXENIFACE_EVTCHN_CONTEXT;
 
 typedef struct _XENIFACE_GRANT_CONTEXT {
