@@ -38,13 +38,12 @@
 
 #include "assert.h"
 #include "wmi.h"
-extern PULONG       InitSafeBootMode;
 
 PDRIVER_OBJECT      DriverObject;
 
 DRIVER_UNLOAD       DriverUnload;
 
-XENIFACE_PARAMETERS	DriverParameters;
+XENIFACE_PARAMETERS DriverParameters;
 
 VOID
 DriverUnload(
@@ -55,15 +54,10 @@ DriverUnload(
 
     Trace("====>\n");
 
-    if (*InitSafeBootMode > 0)
-        goto done;
-
-
     if (DriverParameters.RegistryPath.Buffer != NULL) {
         ExFreePool(DriverParameters.RegistryPath.Buffer);
     }
 
-done:
     DriverObject = NULL;
 
     Trace("<====\n");
@@ -160,7 +154,7 @@ DriverEntry(
 
     DriverParameters.RegistryPath.MaximumLength = RegistryPath->Length + sizeof(UNICODE_NULL);
     DriverParameters.RegistryPath.Length = RegistryPath->Length;
-    DriverParameters.RegistryPath.Buffer = ExAllocatePoolWithTag (PagedPool, 
+    DriverParameters.RegistryPath.Buffer = ExAllocatePoolWithTag (PagedPool,
                                                 DriverParameters.RegistryPath.MaximumLength,
                                                 XENIFACE_POOL_TAG);
     if (NULL == DriverParameters.RegistryPath.Buffer) {
@@ -173,9 +167,6 @@ DriverEntry(
     DriverObject = _DriverObject;
     DriverObject->DriverUnload = DriverUnload;
 
-    if (*InitSafeBootMode > 0)
-        goto done;
-
     DriverObject->DriverExtension->AddDevice = AddDevice;
 
     for (Index = 0; Index <= IRP_MJ_MAXIMUM_FUNCTION; Index++) {
@@ -184,7 +175,6 @@ DriverEntry(
         DriverObject->MajorFunction[Index] = Dispatch;
     }
 
-done:
     Trace("<====\n");
 
     return STATUS_SUCCESS;

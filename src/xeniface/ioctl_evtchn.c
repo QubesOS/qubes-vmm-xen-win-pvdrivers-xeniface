@@ -74,13 +74,19 @@ EvtchnInterruptHandler(
     )
 {
     PXENIFACE_EVTCHN_CONTEXT Context = Argument;
+    PROCESSOR_NUMBER ProcNumber;
+    ULONG ProcIndex;
 
     UNREFERENCED_PARAMETER(Interrupt);
+
     ASSERT(Context != NULL);
 
+    KeGetCurrentProcessorNumberEx(&ProcNumber);
+    ProcIndex = KeGetProcessorIndexFromNumber(&ProcNumber);
+
     if (!KeInsertQueueDpc(&Context->Dpc, NULL, NULL)) {
-        XenIfaceDebugPrint(TRACE, "NOT INSERTED: Context %p, Port %lu, FO %p\n",
-                           Context, Context->LocalPort, Context->FileObject);
+        XenIfaceDebugPrint(TRACE, "NOT INSERTED: Context %p, Port %lu, FO %p, Cpu %lu\n",
+                           Context, Context->LocalPort, Context->FileObject, ProcIndex);
     }
 
     return TRUE;
@@ -185,6 +191,8 @@ IoctlEvtchnBindUnbound(
     if (!NT_SUCCESS(status))
         goto fail3;
 
+    KeInitializeDpc(&Context->Dpc, EvtchnNotificationDpc, Context);
+
     status = STATUS_UNSUCCESSFUL;
     Context->Channel = XENBUS_EVTCHN(Open,
                                      &Fdo->EvtchnInterface,
@@ -201,7 +209,6 @@ IoctlEvtchnBindUnbound(
                                        Context->Channel);
 
     Context->Fdo = Fdo;
-    KeInitializeDpc(&Context->Dpc, EvtchnNotificationDpc, Context);
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 
@@ -277,6 +284,8 @@ IoctlEvtchnBindInterdomain(
     if (!NT_SUCCESS(status))
         goto fail3;
 
+    KeInitializeDpc(&Context->Dpc, EvtchnNotificationDpc, Context);
+
     status = STATUS_UNSUCCESSFUL;
     Context->Channel = XENBUS_EVTCHN(Open,
                                      &Fdo->EvtchnInterface,
@@ -294,7 +303,6 @@ IoctlEvtchnBindInterdomain(
                                        Context->Channel);
 
     Context->Fdo = Fdo;
-    KeInitializeDpc(&Context->Dpc, EvtchnNotificationDpc, Context);
 
     ExInterlockedInsertTailList(&Fdo->EvtchnList, &Context->Entry, &Fdo->EvtchnLock);
 

@@ -25,12 +25,12 @@
 	<PropertyGroup>
 		<IncludePath>..\..\include;$(IncludePath)</IncludePath>
 		<RunCodeAnalysis>true</RunCodeAnalysis>
-        <EnableInf2cat>false</EnableInf2cat>
+		<EnableInf2cat>false</EnableInf2cat>
 		<IntDir>..\$(ProjectName)\$(ConfigurationName)\$(Platform)\</IntDir>
 		<OutDir>..\$(ConfigurationName)\$(Platform)\</OutDir>
 	</PropertyGroup>
 	
-    <ItemDefinitionGroup>
+    <ItemDefinitionGroup>       
 		<ClCompile>
 			<PreprocessorDefinitions>__MODULE__="XENIFACE";POOL_NX_OPTIN=1;NT_PROCESSOR_GROUPS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
 			<WarningLevel>EnableAllWarnings</WarningLevel>
@@ -73,12 +73,18 @@
 		<FilesToPackage Include="@(Inf->'%(CopyOutput)')" Condition="'@(Inf)'!=''" />
 	</ItemGroup>
 	<ItemGroup>
-	        <ClCompile Include="../../src/xeniface/ioctls.c" />
-                <ClCompile Include="../../src/xeniface/wmi.c" />
-                <ClCompile Include="../../src/xeniface/driver.c" />
-                <ClCompile Include="../../src/xeniface/fdo.c" />
-                <ClCompile Include="../../src/xeniface/registry.c" />
-                <ClCompile Include="../../src\xeniface/thread.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctls.c" />
+		<ClCompile Include="..\..\src\xeniface\wmi.c" />
+		<ClCompile Include="..\..\src\xeniface\driver.c" />
+		<ClCompile Include="..\..\src\xeniface\fdo.c" />
+		<ClCompile Include="..\..\src\xeniface\registry.c" />
+		<ClCompile Include="..\..\src\xeniface\thread.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctl_sharedinfo.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctl_suspend.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctl_evtchn.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctl_gnttab.c" />
+		<ClCompile Include="..\..\src\xeniface\ioctl_store.c" />
+		<ClCompile Include="..\..\src\xeniface\irp_queue.c" />
 	</ItemGroup>
         <ItemGroup>
                 <Mofcomp Include="../../src/xeniface/wmi.mof">
@@ -95,6 +101,20 @@
 	</ItemGroup>
 	<ItemGroup>
 		<Inf Include="..\xeniface.inf" />
+	</ItemGroup>
+	<ItemGroup>
+		<ClInclude Include="..\..\src\xeniface\assert.h" />
+		<ClInclude Include="..\..\src\xeniface\driver.h" />
+		<ClInclude Include="..\..\src\xeniface\fdo.h" />
+		<ClInclude Include="..\..\src\xeniface\ioctls.h" />
+		<ClInclude Include="..\..\src\xeniface\irp_queue.h" />
+		<ClInclude Include="..\..\src\xeniface\log.h" />
+		<ClInclude Include="..\..\src\xeniface\mutex.h" />
+		<ClInclude Include="..\..\src\xeniface\names.h" />
+		<ClInclude Include="..\..\src\xeniface\registry.h" />
+		<ClInclude Include="..\..\src\xeniface\thread.h" />
+		<ClInclude Include="..\..\src\xeniface\types.h" />
+		<ClInclude Include="..\..\src\xeniface\wmi.h" />
 	</ItemGroup>
 	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

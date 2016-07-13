@@ -55,7 +55,6 @@ CompleteGnttabIrp(
 
     Id = Irp->Tail.Overlay.DriverContext[0];
     WorkItem = Irp->Tail.Overlay.DriverContext[1];
-    
     // We are not guaranteed to be in the context of the process that initiated the IRP,
     // but we need to be there to unmap memory.
     ChangeProcess = PsGetCurrentProcess() != Id->Process;
@@ -263,7 +262,6 @@ IoctlGnttabPermitForeignAccess(
 
     XenIfaceDebugPrint(TRACE, "< Context %p, Irp %p, KernelVa %p, UserVa %p\n",
                        Context, Irp, Context->KernelVa, Context->UserVa);
-    
     // Pass the result to user mode.
 #pragma prefast(suppress: 6320) // we want to catch all exceptions
     try {
@@ -712,7 +710,7 @@ IoctlGnttabUnmapForeignPages(
     PXENIFACE_CONTEXT_ID ContextId;
 
     status = STATUS_INVALID_BUFFER_SIZE;
-    if (InLen != sizeof(XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN) &&
+    if (InLen != sizeof(XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES_IN) ||
         OutLen != 0) {
         goto fail1;
     }
