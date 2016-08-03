@@ -500,11 +500,19 @@ XcGnttabRevokeForeignAccess(
                               &Returned,
                               NULL);
 
-    Status = GetLastError();
     if (!Success) {
+		Status = GetLastError();
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNGRANT_PAGES failed");
         goto fail;
-    }
+    } else {
+		/*
+		 * [pcfist@gmail.com]
+		 * Don't check GetLastError() on success because DeviceIoControl()
+		 * does not change it when succeeds so we might end up returning stale
+		 * error code value to client when the call is really successful.
+		 */
+		Status = ERROR_SUCCESS;
+	}
 
     EnterCriticalSection(&Xc->RequestListLock);
     RemoveEntryList(&Request->ListEntry);
@@ -634,11 +642,13 @@ XcGnttabUnmapForeignPages(
                               &Returned,
                               NULL);
 
-    Status = GetLastError();
-    if (!Success) {
+	if (!Success) {
+		Status = GetLastError();
         Log(XLL_ERROR, L"IOCTL_XENIFACE_GNTTAB_UNMAP_FOREIGN_PAGES failed");
         goto fail;
-    }
+    } else {
+		Status = ERROR_SUCCESS;
+	}
 
     EnterCriticalSection(&Xc->RequestListLock);
     RemoveEntryList(&Request->ListEntry);
