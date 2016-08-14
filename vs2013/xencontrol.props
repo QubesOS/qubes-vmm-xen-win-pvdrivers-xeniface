@@ -6,7 +6,7 @@
   <PropertyGroup Label="UserMacros" />
 
   <PropertyGroup>
-    <IncludePath>$(SolutionDir)\..\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)..\..\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)\$(Configuration)\$(Platform);$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)\$(Configuration)\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)\$(ProjectName)\$(Configuration)\$(Platform)\</IntDir>
