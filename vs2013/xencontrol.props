@@ -15,7 +15,6 @@
 
   <PropertyGroup Label="Configuration">
     <LinkIncremental>false</LinkIncremental>
-    <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
