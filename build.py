@@ -184,7 +184,7 @@ def shell(command, dir):
                            stderr=subprocess.STDOUT)
 
     for line in sub.stdout:
-        print(line.decode(sys.getdefaultencoding()).rstrip())
+        print(line.decode(sys.stdout.encoding).rstrip())
 
     sub.wait()
 
