@@ -113,6 +113,7 @@ IoctlLog(
     )
 {
     NTSTATUS    status;
+	PCHAR		ptr;
 
     status = STATUS_INVALID_BUFFER_SIZE;
     if (InLen == 0 || InLen > XENIFACE_LOG_MAX_LENGTH || OutLen != 0)
@@ -121,6 +122,14 @@ IoctlLog(
     status = STATUS_INVALID_PARAMETER;
     if (!__IsValidStr(Buffer, InLen))
         goto fail2;
+
+	// remove whitespace from end of buffer
+	for (ptr = Buffer + InLen - 1; ptr != Buffer; --ptr) {
+        if (*ptr != '\n' && *ptr != '\r' && *ptr != '\0')
+            break;
+
+        *ptr = '\0';
+    }
 
     XenIfaceDebugPrint(INFO, "USER: %s\n", Buffer);
     return STATUS_SUCCESS;
@@ -137,7 +146,7 @@ _IRQL_requires_(PASSIVE_LEVEL) // EvtchnFree calls KeFlushQueuedDpcs
 VOID
 XenIfaceCleanup(
     __in  PXENIFACE_FDO Fdo,
-    __in  PFILE_OBJECT  FileObject
+    __in_opt  PFILE_OBJECT  FileObject
     )
 {
     PLIST_ENTRY Node;
@@ -154,7 +163,8 @@ XenIfaceCleanup(
         StoreContext = CONTAINING_RECORD(Node, XENIFACE_STORE_CONTEXT, Entry);
 
         Node = Node->Flink;
-        if (StoreContext->FileObject != FileObject)
+        if (FileObject != NULL &&
+            StoreContext->FileObject != FileObject)
             continue;
 
         XenIfaceDebugPrint(TRACE, "Store context %p\n", StoreContext);
@@ -171,7 +181,8 @@ XenIfaceCleanup(
         EvtchnContext = CONTAINING_RECORD(Node, XENIFACE_EVTCHN_CONTEXT, Entry);
 
         Node = Node->Flink;
-        if (EvtchnContext->FileObject != FileObject)
+        if (FileObject != NULL &&
+            EvtchnContext->FileObject != FileObject)
             continue;
 
         XenIfaceDebugPrint(TRACE, "Evtchn context %p\n", EvtchnContext);
@@ -197,7 +208,8 @@ XenIfaceCleanup(
         SuspendContext = CONTAINING_RECORD(Node, XENIFACE_SUSPEND_CONTEXT, Entry);
 
         Node = Node->Flink;
-        if (SuspendContext->FileObject != FileObject)
+        if (FileObject != NULL &&
+            SuspendContext->FileObject != FileObject)
             continue;
 
         XenIfaceDebugPrint(TRACE, "Suspend context %p\n", SuspendContext);

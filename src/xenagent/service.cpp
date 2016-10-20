@@ -58,8 +58,16 @@ CCritSec::~CCritSec()
     LeaveCriticalSection(m_crit);
 }
 
-int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE ignore, LPSTR lpCmdLine, int nCmdShow)
+int CALLBACK WinMain(
+    _In_     HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevious,
+    _In_     LPSTR     lpCmdLine,
+    _In_     int       nCmdShow)
 {
+    UNREFERENCED_PARAMETER(hInstance);
+    UNREFERENCED_PARAMETER(hPrevious);
+    UNREFERENCED_PARAMETER(nCmdShow);
+
     if (strlen(lpCmdLine) != 0) {
         if (!strcmp(lpCmdLine, "-i") || !strcmp(lpCmdLine, "\"-i\""))
             return CXenAgent::ServiceInstall();
@@ -81,6 +89,12 @@ static CXenAgent s_service;
     va_end(args);
 
     OutputDebugString(message);
+
+    // if possible, send to xeniface to forward to logs
+    CCritSec crit(&s_service.m_crit);
+    if (s_service.m_device) {
+        s_service.m_device->Log(message);
+    }
 }
 
 /*static*/ int CXenAgent::ServiceInstall()
@@ -94,7 +108,7 @@ static CXenAgent s_service;
 
     if (GetModuleFileNameA(NULL, path, MAX_PATH) == 0) {
         CloseServiceHandle(mgr);
-        return GetLastError();
+        return -1;
     }
     path[MAX_PATH] = 0;
 
@@ -156,7 +170,7 @@ static CXenAgent s_service;
 
     if (!StartServiceCtrlDispatcher(ServiceTable)) {
         CXenAgent::Log("Failed to start dispatcher\n");
-        return GetLastError();
+        return -1;
     }
     return 0;
 }
@@ -177,7 +191,9 @@ CXenAgent::CXenAgent() : m_handle(NULL), m_evtlog(NULL),
 {
     m_status.dwServiceType        = SERVICE_WIN32;
     m_status.dwCurrentState       = SERVICE_START_PENDING;
-    m_status.dwControlsAccepted   = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+    m_status.dwControlsAccepted   = SERVICE_ACCEPT_STOP |
+                                    SERVICE_ACCEPT_SHUTDOWN |
+                                    SERVICE_ACCEPT_POWEREVENT;
     m_status.dwWin32ExitCode      = 0;
     m_status.dwServiceSpecificExitCode = 0;
     m_status.dwCheckPoint         = 0;
@@ -204,6 +220,34 @@ CXenAgent::~CXenAgent()
     return new CXenIfaceDevice(path);
 }
 
+void CXenAgent::StartShutdownWatch()
+{
+    if (m_ctxt_shutdown)
+        return;
+
+    m_device->StoreAddWatch("control/shutdown", m_evt_shutdown, &m_ctxt_shutdown);
+
+    m_device->StoreWrite("control/feature-poweroff", "1");
+    m_device->StoreWrite("control/feature-reboot", "1");
+    m_device->StoreWrite("control/feature-s3", "1");
+    m_device->StoreWrite("control/feature-s4", "1");
+}
+
+void CXenAgent::StopShutdownWatch()
+{
+    if (!m_ctxt_shutdown)
+        return;
+
+    m_device->StoreRemove("control/feature-poweroff");
+    m_device->StoreRemove("control/feature-reboot");
+    m_device->StoreRemove("control/feature-s3");
+    m_device->StoreRemove("control/feature-s4");
+
+    m_device->StoreRemoveWatch(m_ctxt_shutdown);
+    m_ctxt_shutdown = NULL;
+}
+
+
 /*virtual*/ void CXenAgent::OnDeviceAdded(CDevice* dev)
 {
     CXenAgent::Log("OnDeviceAdded(%ws)\n", dev->Path());
@@ -212,13 +256,8 @@ CXenAgent::~CXenAgent()
     if (m_device == NULL) {
         m_device = (CXenIfaceDevice*)dev;
 
-        // shutdown
-        m_device->StoreAddWatch("control/shutdown", m_evt_shutdown, &m_ctxt_shutdown);
-        m_device->StoreWrite("control/feature-shutdown", "1");
-
-        // suspend
         m_device->SuspendRegister(m_evt_suspend, &m_ctxt_suspend);
-
+        StartShutdownWatch();
         SetXenTime();
     }
 }
@@ -229,19 +268,26 @@ CXenAgent::~CXenAgent()
 
     CCritSec crit(&m_crit);
     if (m_device == dev) {
-        // suspend
-        if (m_ctxt_suspend)
+        if (m_ctxt_suspend) {
             m_device->SuspendDeregister(m_ctxt_suspend);
-        m_ctxt_suspend = NULL;
-
-        // shutdown
-        m_device->StoreRemove("control/feature-shutdown");
-        if (m_ctxt_shutdown)
-            m_device->StoreRemoveWatch(m_ctxt_shutdown);
-        m_ctxt_shutdown = NULL;
+            m_ctxt_suspend = NULL;
+        }
+        StopShutdownWatch();
 
         m_device = NULL;
     }
+}
+
+/*virtual*/ void CXenAgent::OnDeviceSuspend(CDevice* dev)
+{
+    CXenAgent::Log("OnDeviceSuspend(%ws)\n", dev->Path());
+    StopShutdownWatch();
+}
+
+/*virtual*/ void CXenAgent::OnDeviceResume(CDevice* dev)
+{
+    CXenAgent::Log("OnDeviceResume(%ws)\n", dev->Path());
+    StartShutdownWatch();
 }
 
 void CXenAgent::OnServiceStart()
@@ -259,6 +305,11 @@ void CXenAgent::OnServiceStop()
 void CXenAgent::OnDeviceEvent(DWORD evt, LPVOID data)
 {
     m_devlist.OnDeviceEvent(evt, data);
+}
+
+void CXenAgent::OnPowerEvent(DWORD evt, LPVOID data)
+{
+    m_devlist.OnPowerEvent(evt, data);
 }
 
 bool CXenAgent::ServiceMainLoop()
@@ -372,7 +423,7 @@ bool CXenAgent::RegCheckIsUTC(const char* rootpath)
     if (lr != ERROR_SUCCESS)
         goto fail1;
 
-    long size = 32;
+    DWORD size = 32;
     DWORD length;
     char* buffer = NULL;
 
@@ -434,6 +485,9 @@ void CXenAgent::SetXenTime()
         SetLocalTime(&sys);
 }
 
+#pragma warning(push)
+#pragma warning(disable:28159)
+
 void CXenAgent::OnShutdown()
 {
     CCritSec crit(&m_crit);
@@ -445,7 +499,7 @@ void CXenAgent::OnShutdown()
 
     CXenAgent::Log("OnShutdown(%ws) = %s\n", m_device->Path(), type.c_str());
 
-    if (type == "poweroff" || type == "halt") {
+    if (type == "poweroff") {
         EventLog(EVENT_XENUSER_POWEROFF);
 
         m_device->StoreWrite("control/shutdown", "");
@@ -467,8 +521,8 @@ void CXenAgent::OnShutdown()
                                       SHTDN_REASON_FLAG_PLANNED)) {
             CXenAgent::Log("InitiateSystemShutdownEx failed %08x\n", GetLastError());
         }
-    } else if (type == "hibernate") {
-        EventLog(EVENT_XENUSER_HIBERNATE);
+    } else if (type == "s4") {
+        EventLog(EVENT_XENUSER_S4);
 
         m_device->StoreWrite("control/shutdown", "");
         AcquireShutdownPrivilege();
@@ -486,6 +540,8 @@ void CXenAgent::OnShutdown()
     }
 }
 
+#pragma warning(pop)
+
 void CXenAgent::OnSuspend()
 {
     CCritSec crit(&m_crit);
@@ -495,8 +551,9 @@ void CXenAgent::OnSuspend()
     CXenAgent::Log("OnSuspend(%ws)\n", m_device->Path());
     EventLog(EVENT_XENUSER_UNSUSPENDED);
 
-    m_device->StoreWrite("control/feature-shutdown", "1");
-
+    // recreate shutdown watch, as suspending deactivated the watch
+    StopShutdownWatch();
+    StartShutdownWatch();
     SetXenTime();
 }
 
@@ -510,6 +567,9 @@ void CXenAgent::SetServiceStatus(DWORD state, DWORD exit /*= 0*/, DWORD hint /*=
 
 void WINAPI CXenAgent::__ServiceMain(int argc, char** argv)
 {
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+
     m_handle = RegisterServiceCtrlHandlerEx(SVC_NAME, ServiceControlHandlerEx, NULL);
     if (m_handle == NULL)
         return;
@@ -529,6 +589,8 @@ void WINAPI CXenAgent::__ServiceMain(int argc, char** argv)
 
 DWORD WINAPI CXenAgent::__ServiceControlHandlerEx(DWORD req, DWORD evt, LPVOID data, LPVOID ctxt)
 {
+    UNREFERENCED_PARAMETER(ctxt);
+
     switch (req)
     {
     case SERVICE_CONTROL_STOP:
@@ -544,6 +606,11 @@ DWORD WINAPI CXenAgent::__ServiceControlHandlerEx(DWORD req, DWORD evt, LPVOID d
     case SERVICE_CONTROL_DEVICEEVENT:
         SetServiceStatus(SERVICE_RUNNING);
         OnDeviceEvent(evt, data);
+        return NO_ERROR;
+
+    case SERVICE_CONTROL_POWEREVENT:
+        SetServiceStatus(SERVICE_RUNNING);
+        OnPowerEvent(evt, data);
         return NO_ERROR;
 
     case SERVICE_CONTROL_INTERROGATE:

@@ -34,9 +34,8 @@
 
 #include <version.h>
 
-#define SVC_NAME "xensvc"
-#define SVC_DISPLAYNAME PRODUCT_NAME_STR ## "Interface Service"
-#define SVC_DESC "Monitors and provides various metrics to XenStore"
+#define SVC_NAME        __MODULE__
+#define SVC_DISPLAYNAME SVC_NAME
 
 #include "devicelist.h"
 #include "xenifacedevice.h"
@@ -55,20 +54,25 @@ public: // statics
 
 public: // ctor/dtor
     CXenAgent();
-    ~CXenAgent();
+    virtual ~CXenAgent();
 
 public: // IDeviceCreator
     virtual CDevice* Create(const wchar_t* path);
     virtual void OnDeviceAdded(CDevice* dev);
     virtual void OnDeviceRemoved(CDevice* dev);
+    virtual void OnDeviceSuspend(CDevice* dev);
+    virtual void OnDeviceResume(CDevice* dev);
 
 private: // service events
     void OnServiceStart();
     void OnServiceStop();
     void OnDeviceEvent(DWORD, LPVOID);
+    void OnPowerEvent(DWORD, LPVOID);
     bool ServiceMainLoop();
 
 private: // helpers
+    void StartShutdownWatch();
+    void StopShutdownWatch();
     void AcquireShutdownPrivilege();
     void EventLog(DWORD evt);
     bool IsHostTimeUTC();
