@@ -88,7 +88,7 @@ CopyFiles=CoInst.NT.Copy
 AddReg=CoInst_AddReg
 
 [CoInst_AddReg]
-HKR,,CoInstallers32,0x00010000,"xeniface_coinst_@MAJOR_VERSION@_@MINOR_VERSION@_@MICRO_VERSION@_@BUILD_NUMBER@.dll,Entry"
+HKR,,,0x00010000,"xeniface_coinst_@MAJOR_VERSION@_@MINOR_VERSION@_@MICRO_VERSION@_@BUILD_NUMBER@.dll,Entry"
 
 [xenagent_Service_Inst]
 DisplayName    = %xenagent.SVCDESC%
