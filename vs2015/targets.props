@@ -32,4 +32,20 @@
 		<TargetVersion>Windows8</TargetVersion>
 		<UseDebugLibraries>false</UseDebugLibraries>
 	</PropertyGroup>
+	<PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Windows 7 Debug|Win32'">
+		<TargetVersion>Windows7</TargetVersion>
+		<UseDebugLibraries>true</UseDebugLibraries>
+	</PropertyGroup>
+	<PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Windows 7 Release|Win32'">
+		<TargetVersion>Windows7</TargetVersion>
+		<UseDebugLibraries>false</UseDebugLibraries>
+	</PropertyGroup>
+	<PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Windows 7 Debug|x64'">
+		<TargetVersion>Windows7</TargetVersion>
+		<UseDebugLibraries>true</UseDebugLibraries>
+	</PropertyGroup>
+	<PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Windows 7 Release|x64'">
+		<TargetVersion>Windows7</TargetVersion>
+		<UseDebugLibraries>false</UseDebugLibraries>
+	</PropertyGroup>
 </Project>

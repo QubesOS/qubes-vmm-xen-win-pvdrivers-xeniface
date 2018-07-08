@@ -41,5 +41,25 @@
 			<Platform>x64</Platform>
 			<WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
 		</ProjectConfiguration>
+		<ProjectConfiguration Include="Windows 7 Debug|Win32">
+			<Configuration>Windows 7 Debug</Configuration>
+			<Platform>Win32</Platform>
+			<WindowsTargetPlatformVersion>7</WindowsTargetPlatformVersion>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Windows 7 Release|Win32">
+			<Configuration>Windows 7 Release</Configuration>
+			<Platform>Win32</Platform>
+			<WindowsTargetPlatformVersion>7</WindowsTargetPlatformVersion>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Windows 7 Debug|x64">
+			<Configuration>Windows 7 Debug</Configuration>
+			<Platform>x64</Platform>
+			<WindowsTargetPlatformVersion>7</WindowsTargetPlatformVersion>
+		</ProjectConfiguration>
+		<ProjectConfiguration Include="Windows 7 Release|x64">
+			<Configuration>Windows 7 Release</Configuration>
+			<Platform>x64</Platform>
+			<WindowsTargetPlatformVersion>7</WindowsTargetPlatformVersion>
+		</ProjectConfiguration>
 	</ItemGroup>
 </Project>
