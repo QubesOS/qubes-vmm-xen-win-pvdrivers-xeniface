@@ -2,7 +2,11 @@
 #define _XENCONTROL_H_
 
 #include <windows.h>
+#ifdef __MINGW32__
+#include <stdarg.h>
+#else
 #include <varargs.h>
+#endif
 #include "xeniface_ioctls.h"
 
 #ifdef XENCONTROL_EXPORTS

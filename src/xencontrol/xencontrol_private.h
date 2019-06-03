@@ -4,8 +4,13 @@
 #include <windows.h>
 #include "xencontrol.h"
 
+#ifdef __MINGW32__
+#define Log(level, format, ...) \
+        _Log(Xc->Logger, level, Xc->LogLevel, __FUNCTION__, format, ##__VA_ARGS__)
+#else
 #define Log(level, format, ...) \
         _Log(Xc->Logger, level, Xc->LogLevel, __FUNCTION__, format, __VA_ARGS__)
+#endif
 
 #define InitializeListHead(ListHead) ( \
     (ListHead)->Flink = (ListHead)->Blink = (ListHead))
