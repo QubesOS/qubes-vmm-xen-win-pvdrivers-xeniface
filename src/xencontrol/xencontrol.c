@@ -1,6 +1,8 @@
 #define INITGUID
 #include <windows.h>
+#ifndef __MINGW32__
 #include <winioctl.h>
+#endif
 #include <setupapi.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -26,7 +28,7 @@ _Log(
     IN  XENCONTROL_LOGGER *Logger,
     IN  XENCONTROL_LOG_LEVEL LogLevel,
     IN  XENCONTROL_LOG_LEVEL CurrentLogLevel,
-    IN  PCHAR Function,
+    IN  LPCSTR Function,
     IN  PWCHAR Format,
     ...
     )
@@ -50,7 +52,7 @@ _Log(
 static void
 _LogMultiSz(
     IN  PXENCONTROL_CONTEXT Xc,
-    IN  PCHAR Caller,
+    IN  LPCSTR Caller,
     IN  XENCONTROL_LOG_LEVEL Level,
     IN  PCHAR MultiSz
     )
