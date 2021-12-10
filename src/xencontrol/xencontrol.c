@@ -158,7 +158,7 @@ XcOpen(
         goto fail;
     }
 
-    _Log(Logger, XLL_ERROR, Context->LogLevel, __FUNCTION__,
+    _Log(Logger, XLL_INFO, Context->LogLevel, __FUNCTION__,
          L"XenIface handle: %p", Context->XenIface);
 
     free(DetailData);
